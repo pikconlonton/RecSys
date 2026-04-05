@@ -245,14 +245,145 @@ $$\text{L2Norm}(\mathbf{x}) = \frac{\mathbf{x}}{\|\mathbf{x}\|_2}$$
 
 ### 4.6 Training
 
+#### 4.6.1 Dataset Design
+
+Hai `Dataset` class chạy song song mỗi epoch:
+
+| Dataset | Mô tả | Sample format |
+|---|---|---|
+| `SimDataset` | Positive pairs business–business từ `edges_business_business_similar.txt` | `(anchor_idx, pos_idx)` |
+| `UserDataset` | Triplet user–business từ `edges_user_business.txt` + negative sampling | `(user_idx, biz_pos, biz_neg)` |
+
+**SimDataset** — đơn giản: mỗi cặp $(b_i, b_j)$ trong file similar edges trở thành một positive pair. Không cần negative sampling riêng vì InfoNCE dùng **in-batch negatives**.
+
+**UserDataset** — phức tạp hơn, negative sampling phụ thuộc `hard_prob` (float $\in [0, 1]$):
+
+```
+Với mỗi (user, biz_pos):
+  if random() < hard_prob:
+      # Hard negative: chọn biz tương tự biz_pos mà user chưa rate
+      candidates = hard_neg_map[biz_pos] \ user_pos[user]
+      biz_neg = random.choice(candidates)   # fallback random nếu rỗng
+  else:
+      # Random negative: chọn biz bất kỳ ∉ user_pos[user]
+      biz_neg = random_biz ∉ user_pos[user]
+```
+
+`hard_neg_map` ban đầu được xây từ text-similarity tĩnh (`edges_business_business_similar.txt`), sau đó được **rebuild động** từ embedding hiện tại mỗi `REBUILD_NEG_EVERY` epoch (xem mục 4.6.3).
+
+Cả hai dataset dùng chung `DataLoader` với `batch_size=4096`, `shuffle=True`, `drop_last=True`.
+
+#### 4.6.2 Loss Functions
+
+**1. InfoNCE Loss (Similarity Head)**
+
+Dùng cho `SimDataset` — kéo embedding business tương tự lại gần nhau:
+
+$$
+\mathcal{L}_{\text{sim}} = -\frac{1}{B} \sum_{i=1}^{B} \log \frac{\exp(\text{sim}(\mathbf{z}_i^a, \mathbf{z}_i^p) / \tau)}{\sum_{j=1}^{B} \exp(\text{sim}(\mathbf{z}_i^a, \mathbf{z}_j^p) / \tau)}
+$$
+
+- $\mathbf{z}^a, \mathbf{z}^p$: output của `sim_head` (MLP 128→128→128, ReLU), đã L2-normalize
+- $\tau = 0.07$ — temperature thấp → phân phối sắc nét, buộc model phân biệt rõ
+- **In-batch negatives**: tất cả $B-1$ samples khác trong batch đóng vai trò negative → không cần sample negative riêng
+- Labels = diagonal: `labels = torch.arange(B)`, dùng `F.cross_entropy`
+
+**2. BPR Loss (User–Business)**
+
+Dùng cho `UserDataset` — buộc $\text{score}(u, b^+) > \text{score}(u, b^-)$:
+
+$$
+\mathcal{L}_{\text{user}} = -\frac{1}{B} \sum_{i=1}^{B} \ln \sigma\!\left(\mathbf{h}_{u_i}^\top \mathbf{h}_{b_i^+} - \mathbf{h}_{u_i}^\top \mathbf{h}_{b_i^-}\right)
+$$
+
+- $\mathbf{h}_u, \mathbf{h}_b$: output chính của HeteroLightGCN (mean pooling + L2-normalize)
+- Dot product = cosine similarity (vì đã normalize)
+- `F.logsigmoid` cho numerical stability
+
+**Tổng loss mỗi step:**
+
+$$
+\mathcal{L} = \lambda_{\text{sim}} \cdot \mathcal{L}_{\text{sim}} + \lambda_{\text{user}} \cdot \mathcal{L}_{\text{user}}
+$$
+
+| Hệ số | Giá trị | Ý nghĩa |
+|---|---|---|
+| $\lambda_{\text{sim}}$ | 0.5 | Trọng số InfoNCE (auxiliary) |
+| $\lambda_{\text{user}}$ | 1.0 | Trọng số BPR (primary) |
+
+#### 4.6.3 Training Strategy — Curriculum Learning + Dynamic Hard Negatives
+
+**Curriculum Schedule (3 giai đoạn):**
+
+```
+Epoch  1–10  │ random      │ hard_prob = 0.0  → chỉ random negatives
+Epoch 11–30  │ mixed       │ hard_prob tăng tuyến tính 0.0 → 1.0
+Epoch 31–80  │ hard        │ hard_prob = 1.0  → chỉ hard negatives
+```
+
+Giai đoạn **mixed** tránh oscillation bằng cách flip **per-sample** (mỗi sample tự coin-flip theo `hard_prob`) thay vì flip toàn bộ epoch.
+
+**Dynamic Hard Negative Rebuild:**
+
+Mỗi `REBUILD_NEG_EVERY = 10` epoch (từ epoch 11 trở đi):
+
+1. Forward pass lấy `biz_h` hiện tại (detach, no grad)
+2. Build `faiss.IndexFlatIP` trên `biz_h` (đã L2-normalize)
+3. Tìm `top_k = 15` nearest neighbors cho mỗi business
+4. Cập nhật `hard_neg_map` → `UserDataset` dùng negative mới
+
+→ Hard negatives luôn **adaptive** theo embedding hiện tại, không bị stale từ text-similarity tĩnh ban đầu.
+
+**LR Schedule:**
+
+| Sự kiện | LR |
+|---|---|
+| Khởi tạo | $10^{-3}$ |
+| StepLR decay | $\times 0.8$ mỗi 15 epoch |
+| Warm restart tại epoch 31 (hard phase) | $3 \times 10^{-4}$ |
+
+**Gradient clipping:** `max_norm = 1.0` — ngăn gradient explosion khi chuyển sang hard negatives.
+
+**Training loop mỗi epoch:**
+
+```
+1. Single forward pass toàn graph → user_h, biz_h, user_proj, biz_proj
+2. Lặp N = min(len(sim_loader), len(user_loader), 128) steps:
+     a. Lấy batch từ sim_loader  → tính L_sim  (InfoNCE)
+     b. Lấy batch từ user_loader → tính L_user (BPR)
+     c. Cộng dồn: accum_loss += λ_sim × L_sim + λ_user × L_user
+3. Backward trên accum_loss / N (1 lần backward duy nhất)
+4. Gradient clipping → optimizer step → scheduler step
+5. Nếu epoch % 10 == 0 và đã qua mixed phase → rebuild hard_neg_map
+6. Save best.pt nếu L_user giảm; save epoch checkpoint mỗi 5 epoch
+```
+
+> **Lưu ý kiến trúc:** Forward pass chạy **1 lần / epoch** trên toàn graph (full-batch GNN propagation), sau đó loss được tính trên mini-batches bằng cách index vào embedding table. Điều này tiết kiệm rất nhiều computation so với forward lại mỗi step.
+
+#### 4.6.4 Hyperparameters
+
 | Hyperparameter | Giá trị |
 |---|---|
 | Embedding dimension | 128 |
 | Số layers | 3 |
 | Dropout | 0.1 |
+| Batch size | 4,096 |
+| Max steps / epoch | 128 |
+| Epochs | 80 |
+| Optimizer | Adam |
+| Initial LR | $10^{-3}$ |
+| LR decay | $\times 0.8$ / 15 epochs (StepLR) |
+| LR hard restart | $3 \times 10^{-4}$ tại epoch 31 |
+| Temperature $\tau$ | 0.07 |
+| $\lambda_{\text{sim}}$ | 0.5 |
+| $\lambda_{\text{user}}$ | 1.0 |
+| Grad clip max\_norm | 1.0 |
+| AMP | ON (CUDA), OFF (CPU) |
 | Matmul precision | fp32 (CUDA sparse không hỗ trợ fp16) |
+| Hard neg rebuild interval | 10 epochs |
+| Hard neg top\_k | 15 |
 | Best epoch | 30 |
-| Best loss | L\_user = 0.4361 |
+| Best loss | $\mathcal{L}_{\text{user}} = 0.4361$ |
 
 **Output:**
 - `user_h.pt` — $[211{,}115 \times 128]$ L2-normalized
