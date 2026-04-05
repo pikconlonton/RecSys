@@ -1,0 +1,25 @@
+# Virtual environment
+venv/
+.venv/
+
+# Outputs (large model artifacts, embeddings, indices)
+outputs/
+
+# Yelp raw data (too large for git)
+Yelp-JSON/
+Yelp-Photos/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
