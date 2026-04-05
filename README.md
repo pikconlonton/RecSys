@@ -332,55 +332,136 @@ $$\text{candidates} = \text{argTopK}_{b}\!\left(\mathbf{q} \cdot \mathbf{h}_b\ri
 
 ## 7. Phase 6 — Social Re-ranking (`srcs/inference/inference_social.py`)
 
-Bổ sung **friend influence** vào ranking — nếu bạn bè (giống user) đã ghé một business, business đó nên được ưu tiên hơn.
+### 7.1 Động lực
 
-### 7.1 Friend Embeddings & Weights
+Embedding score từ Phase 5 chỉ dựa trên **sở thích cá nhân** (user profile + session). Tuy nhiên, hành vi thực tế cho thấy người dùng thường bị ảnh hưởng bởi **bạn bè có cùng gu**. Social Re-ranking khai thác tín hiệu này: nếu những người bạn giống mình đã ghé một business, business đó đáng được ưu tiên hơn.
 
-Cho user $u$ với tập bạn $F(u) = \{f_1, \ldots, f_{|F|}\}$:
+Ý tưởng:
+- Không phải mọi bạn bè đều có ảnh hưởng ngang nhau — bạn **giống mình** (trong embedding space) thì ý kiến **quan trọng hơn**
+- Social score là tín hiệu **bổ sung**, không thay thế embedding score → kết hợp bằng trọng số $\gamma$
 
-**Cosine similarity giữa user và mỗi friend:**
+### 7.2 Tổng quan pipeline
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ① Load artefacts: user_h, biz_h, Faiss index, friend graph, history   │
+│                         │                                                │
+│  ② Resolve user ──► u_vec = user_h[u]                                   │
+│                         │                                                │
+│  ③ Session embedding ──► s = attention_weighted_mean(recent, u_vec)     │
+│                         │                                                │
+│  ④ Combine ──► q = L2Norm(α·u_vec + (1-α)·s)                          │
+│                         │                                                │
+│  ⑤ Faiss search(q, 5×K) ──► ~100 candidates (nhiều hơn để re-rank)    │
+│                         │                                                │
+│  ⑥ Social score ──► với mỗi candidate b:                               │
+│     │  Lấy friends F(u) từ social graph                                 │
+│     │  Tính w_f = softmax(cos(h_u, h_f) / τ) cho mỗi friend           │
+│     │  social(u,b) = Σ w_f × I(f đã ghé b)                            │
+│                         │                                                │
+│  ⑦ Re-rank ──► final = (1-γ)·emb_score + γ·social_score               │
+│                         │                                                │
+│  ⑧ Sort by final ──► return Top-K                                      │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 7.3 Bước 1-4: Session-aware query (giống Phase 5)
+
+Các bước 1-4 **hoàn toàn giống** `inference.py` (xem [Phase 5](#6-phase-5--inference-session-aware)):
+
+$$\mathbf{q} = \text{L2Norm}\!\left(\alpha \cdot \mathbf{h}_u + (1 - \alpha) \cdot \mathbf{s}\right), \quad \alpha = 0.4$$
+
+### 7.4 Bước 5: Faiss search — lấy nhiều candidates
+
+Thay vì lấy đúng top-K như Phase 5, ở đây lấy **5×K candidates**:
+
+$$\text{candidates} = \text{argTop}_{5K}\!\left(\mathbf{q} \cdot \mathbf{h}_b\right)$$
+
+**Lý do:** Social re-ranking có thể đẩy business từ vị trí #50 lên top-10 nếu nhiều bạn bè đã ghé. Cần pool candidates đủ lớn để re-ranking có ý nghĩa.
+
+### 7.5 Bước 6: Tính Social Score
+
+#### 7.5.1 Friend Weights — ai quan trọng hơn ai?
+
+Cho user $u$ với tập bạn $F(u) = \{f_1, \ldots, f_{|F|}\}$. Trước tiên tính **mức độ tương đồng** giữa user và từng friend:
 
 $$\text{sim}(u, f) = \cos(\mathbf{h}_u, \mathbf{h}_f) = \mathbf{h}_u \cdot \mathbf{h}_f$$
 
-(Vì $\mathbf{h}$ đã L2-normalize nên dot product = cosine)
+(Dot product = cosine vì $\mathbf{h}$ đã L2-normalize)
 
-**Softmax để tạo friend weights:**
+Sau đó **softmax với temperature** để chuyển thành trọng số xác suất:
 
-$$w_f = \frac{\exp\!\left(\text{sim}(u,f) / \tau\right)}{\sum_{f' \in F(u)} \exp\!\left(\text{sim}(u,f') / \tau\right)}, \quad \tau = 0.1$$
+$$w_f = \frac{\exp\!\left(\text{sim}(u,f) \;/\; \tau\right)}{\sum_{f' \in F(u)} \exp\!\left(\text{sim}(u,f') \;/\; \tau\right)}, \quad \tau = 0.1$$
 
-> Friend nào có embedding **gần user nhất** (cùng sở thích) sẽ nhận trọng số lớn nhất.
+**Ý nghĩa temperature $\tau = 0.1$:** Phân bố rất **sharp** — friend giống user nhất chiếm phần lớn trọng số, friend xa trong embedding space gần như bị bỏ qua. Nếu $\tau = 1.0$ thì trọng số sẽ đều hơn giữa tất cả friends.
 
-### 7.2 Social Score
+#### 7.5.2 Social Score — "bạn giống mình đã thích gì?"
 
 $$\text{social}(u, b) = \sum_{f \in F(u)} w_f \cdot \mathbb{I}\!\left[f \text{ rated } b\right]$$
 
-Trong đó $\mathbb{I}[\cdot]$ là indicator function (1 nếu friend $f$ đã rate business $b$, 0 ngược lại).
+Trong đó $\mathbb{I}[\cdot]$ là **indicator function**: bằng 1 nếu friend $f$ đã tương tác với business $b$ (rating ≥ 4), bằng 0 ngược lại.
 
-**Ý nghĩa:** Nếu nhiều bạn bè (đặc biệt là bạn giống user) đã ghé business $b$ → social score cao → $b$ được đẩy lên trong ranking.
+**Ví dụ minh họa:**
 
-### 7.3 Final Re-ranking Formula
+```
+User A có 3 bạn với trọng số:
+  Bạn B: w = 0.50  (rất giống A)
+  Bạn C: w = 0.30  (khá giống)
+  Bạn D: w = 0.20  (ít giống)
 
-$$\boxed{\text{final}(u, b) = (1 - \gamma) \cdot \underbrace{\text{emb\_score}(u, b)}_{\text{cosine similarity}} + \gamma \cdot \underbrace{\text{social}(u, b)}_{\text{friend influence}}}$$
+Business X: B đã ghé ✓, D đã ghé ✓  → social(A, X) = 0.50 + 0.20 = 0.70
+Business Y: C đã ghé ✓              → social(A, Y) = 0.30
+Business Z: không ai ghé             → social(A, Z) = 0.00
+```
+
+→ Business X được boost mạnh nhất vì bạn B (giống user nhất) đã ghé.
+
+#### 7.5.3 Edge cases
+
+| Trường hợp | Xử lý |
+|---|---|
+| User không có friend | social = 0 cho tất cả → kết quả = embedding only |
+| Có friends nhưng không ai ghé candidates | social = 0 → không ảnh hưởng ranking |
+| Random user selection | Ưu tiên user có ≥ 3 friends để social score có ý nghĩa |
+
+### 7.6 Bước 7: Final Re-ranking
+
+Kết hợp 2 tín hiệu bằng **weighted linear combination**:
+
+$$\boxed{\text{final}(u, b) = (1 - \gamma) \cdot \underbrace{\cos(\mathbf{q},\; \mathbf{h}_b)}_{\text{embedding score}} \;+\; \gamma \cdot \underbrace{\text{social}(u, b)}_{\text{friend influence}}}$$
 
 | Tham số | Giá trị | Ý nghĩa |
 |---|---|---|
-| $\gamma$ | 0.2 | 80% embedding score + 20% social score |
-| $\tau$ (social attention) | 0.1 | Sharp attention trên friends |
-| `fetch_k` | $5 \times \text{topk} + |\text{session}|$ | Lấy nhiều candidates hơn cho re-ranking |
+| $\gamma$ | 0.2 | **80% embedding + 20% social** — social là tín hiệu phụ |
+| $\tau$ | 0.1 | Sharp attention: chỉ bạn giống nhất mới có ảnh hưởng |
+| `fetch_k` | $5K + |\text{session}|$ | Pool candidates lớn cho re-ranking |
 
-### 7.4 Pipeline hoàn chỉnh
+**Tại sao $\gamma = 0.2$ (không cao hơn):**
+- Embedding score đã capture collaborative filtering qua GNN → tín hiệu chính
+- Social score là **complementary signal** — bổ sung nhưng không override
+- $\gamma$ quá cao → hệ thống trở thành "bạn bè quyết định" thay vì "sở thích cá nhân"
+- Trong thực nghiệm, $\gamma = 0.2$ đã giúp spread score từ ~0.006 (embedding only) lên ~0.06, tạo ra sự phân biệt rõ ràng hơn giữa các candidates
+
+### 7.7 Output
+
+Kết quả hiển thị **3 cột score** cho mỗi business:
 
 ```
-1. Load user_h, biz_h, Faiss index, friend graph, user history
-2. Resolve user → u_vec
-3. Build session embedding (attention-weighted mean)
-4. Combine: q = L2Norm(α·u_vec + (1-α)·session)
-5. Faiss search → 5×topk candidates
-6. Compute friend weights (softmax cosine)
-7. Compute social_score cho mỗi candidate
-8. Re-rank: final = (1-γ)·emb + γ·social
-9. Sort by final score → return top-K
+  Rank  Final     Emb       Social    Name                                    Categories
+  ──────────────────────────────────────────────────────────────────────────────────────
+  1     0.8547    0.9684    0.4070    The Belgian Café                        Bars, Belgian
+  2     0.8234    0.9672    0.2450    Green Eggs Café                         Breakfast
+  3     0.7801    0.9751       -      Reading Terminal Market                 Food Hall
+  ...
 ```
+
+- **Final**: Score cuối cùng (đã kết hợp embedding + social)
+- **Emb**: Cosine similarity thuần từ Faiss
+- **Social**: Mức "friend influence" ( `-` = 0, không có bạn nào ghé)
+
+Summary cuối output cho biết bao nhiêu kết quả trong top-K được boost bởi social score.
 
 ---
 
@@ -409,14 +490,43 @@ $$\boxed{\text{final}(u, b) = (1 - \gamma) \cdot \underbrace{\text{emb\_score}(u
 
 ### Data Dimensions
 
-| Artifact | Shape | Mô tả |
+Pipeline đi qua 3 giai đoạn biến đổi kích thước:
+
+```
+Raw text ──► SentenceTransformer ──► 384-dim ──► GNN projection ──► 128-dim ──► Faiss search
+```
+
+#### Pretrained embeddings (384-dim) — output Phase 1
+
+| Artifact | Type | Entries | Vector dim | Mô tả |
+|---|---|---|---|---|
+| `business_embeddings.pkl` | dict | 14,567 | 384 | Text embedding mỗi business (name + categories + reviews) |
+| `user_embeddings.pkl` | dict | ~211,115 | 384 | Text embedding mỗi user (profile + reviews) |
+
+#### Graph data — output Phase 2
+
+| Artifact | Size | Nội dung |
 |---|---|---|
-| `business_embeddings.pkl` | {14,567: $\mathbb{R}^{384}$} | Pretrained text embeddings |
-| `user_embeddings.pkl` | {211,115: $\mathbb{R}^{384}$} | Pretrained text embeddings |
-| `embedded_graph.pt` | ~366MB | HeteroData + 384-dim features |
-| `user_h.pt` | [211,115 × 128] | GNN output, L2-normalized |
-| `biz_h.pt` | [14,567 × 128] | GNN output, L2-normalized |
-| `faiss_biz.index` | 14,567 × 128-d | IndexFlatIP |
+| `graph.pt` | ~50MB | HeteroData topology (5 edge types) + user2idx + biz2idx |
+| `embedded_graph.pt` | ~366MB | graph.pt + user.x $[211{,}115 \times 384]$ + business.x $[14{,}567 \times 384]$ |
+
+#### Trained embeddings (128-dim) — output Phase 3-4
+
+| Artifact | Shape | Dtype | Mô tả |
+|---|---|---|---|
+| `user_h.pt` | $[211{,}115 \times 128]$ | float32, L2-norm | GNN-trained user embeddings |
+| `biz_h.pt` | $[14{,}567 \times 128]$ | float32, L2-norm | GNN-trained business embeddings |
+| `mappings.pt` | dict (4 keys) | — | user2idx, biz2idx, idx2user, idx2biz |
+| `faiss_biz.index` | 14,567 vectors × 128-d | IndexFlatIP | Brute-force cosine search index |
+| `ckpt1/best.pt` | — | — | Model checkpoint (epoch 30, L\_user=0.4361) |
+
+#### Edge files — output Phase 2
+
+| File | Format | Mô tả |
+|---|---|---|
+| `edges_user_business.txt` | `user_id \t biz_id` | Positive interactions (stars ≥ 4) |
+| `edges_user_user.txt` | `user_id \t user_id` | Filtered friendships (co-interaction) |
+| `edges_business_business_similar.txt` | `biz_id \t biz_id \t score` | KNN similar (cosine > 0.6) |
 
 ---
 
