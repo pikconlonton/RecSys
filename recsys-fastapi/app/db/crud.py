@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.db.models import Business, Log
+from app.db.models import Business, Log, SocialFriend, SocialInteraction
 from app.schemas.logs import LogCreate
 
 def create_log(db: Session, log: LogCreate):
@@ -65,3 +65,64 @@ def get_businesses_by_ids(db: Session, business_ids: list[str]) -> dict[str, Bus
 
     rows = db.query(Business).filter(Business.business_id.in_(business_ids)).all()
     return {b.business_id: b for b in rows}
+
+
+def replace_friends(db: Session, user_id: str, friends: list[str]) -> int:
+    """Replace friend list for a user (idempotent upsert model)."""
+
+    # Clear existing edges
+    db.query(SocialFriend).filter(SocialFriend.user_id == user_id).delete()
+
+    # Insert new edges
+    unique = []
+    seen: set[str] = set()
+    for f in friends:
+        if not f or f == user_id or f in seen:
+            continue
+        seen.add(f)
+        unique.append(f)
+
+    for f in unique:
+        db.add(SocialFriend(user_id=user_id, friend_id=f))
+
+    db.commit()
+    return len(unique)
+
+
+def get_friends(db: Session, user_id: str) -> list[str]:
+    rows = db.query(SocialFriend.friend_id).filter(SocialFriend.user_id == user_id).all()
+    return [r[0] for r in rows]
+
+
+def create_social_interaction(db: Session, payload: dict) -> SocialInteraction:
+    obj = SocialInteraction(**payload)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def get_social_scores_for_candidates(
+    db: Session,
+    friend_ids: list[str],
+    candidate_business_ids: list[str],
+) -> dict[str, float]:
+    """Aggregate social weight per business over a set of friend_ids.
+
+    Returns mapping business_id -> summed_weight.
+    """
+
+    if not friend_ids or not candidate_business_ids:
+        return {}
+
+    rows = (
+        db.query(SocialInteraction.business_id, SocialInteraction.weight)
+        .filter(SocialInteraction.user_id.in_(friend_ids))
+        .filter(SocialInteraction.business_id.in_(candidate_business_ids))
+        .all()
+    )
+
+    out: dict[str, float] = {}
+    for biz_id, w in rows:
+        out[biz_id] = out.get(biz_id, 0.0) + float(w or 0.0)
+    return out

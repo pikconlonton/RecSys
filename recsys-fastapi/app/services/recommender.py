@@ -61,7 +61,10 @@ class RecommenderService:
             now = datetime.utcnow().isoformat()
             for r in recs:
                 r.setdefault("generated_at", now)
-            return recs
+            # If mapping is missing / user unknown, real inference may return [].
+            # In that case, fall back to heuristic so the API still returns candidates.
+            if recs:
+                return recs
 
         # Basic heuristic: recommend the most frequently viewed businesses.
         viewed = [l.business_id for l in logs if l.action == "view" and l.business_id]

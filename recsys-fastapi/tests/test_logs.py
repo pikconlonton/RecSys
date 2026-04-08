@@ -215,3 +215,90 @@ def test_recommendations_enriched_with_business_metadata():
             # If the heuristic path returns the same business_id, metadata must be present.
             if first.get("business_id") == "b_meta_1":
                 assert first["metadata"]["name"] == "Biz Meta 1"
+
+
+def test_social_reranking_from_fe_data():
+    """Social reranking should boost businesses that friends interacted with.
+
+    We keep it self-contained:
+    - inject tiny embeddings so friend weights can be computed (method B)
+    - use heuristic recommendation so candidate set is deterministic
+    - friend interaction boosts one of the candidates
+    """
+
+    import torch
+
+    from app.services.artefacts import RecSysArtefacts
+    from app.services.recommender import recommender_service
+
+    # user u1 and friend u2
+    user_h = torch.tensor(
+        [
+            [1.0, 0.0],  # u1
+            [1.0, 0.0],  # u2 (very similar)
+        ],
+        dtype=torch.float32,
+    )
+    # biz embeddings not used in heuristic rec path, but artefacts require them
+    biz_h = torch.tensor(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=torch.float32,
+    )
+
+    # Dummy faiss index (won't be used because user u1 isn't in mapping below for Faiss rec)
+    import faiss
+    import numpy as np
+
+    biz_np = biz_h.numpy().astype("float32")
+    faiss.normalize_L2(biz_np)
+    index = faiss.IndexFlatIP(biz_np.shape[1])
+    index.add(biz_np)
+
+    artefacts = RecSysArtefacts(
+        user_h=user_h,
+        biz_h=biz_h,
+        index=index,
+        # IMPORTANT: omit "u1" to force heuristic recommendation path
+        # (Faiss inference returns [] if user_id not found).
+        # Friend embeddings still exist so weights can be computed.
+        user2idx={"u2": 1},
+        biz2idx={"b1": 0, "b2": 1},
+        idx2biz={0: "b1", 1: "b2"},
+    )
+    recommender_service.set_artefacts(artefacts)
+
+    with TestClient(app) as client:
+        # User session logs so heuristic returns b1 (2 views) and b2 (1 view)
+        client.post("/logs/", json={"user_id": "u1", "action": "view", "business_id": "b1"})
+        client.post("/logs/", json={"user_id": "u1", "action": "view", "business_id": "b1"})
+        client.post("/logs/", json={"user_id": "u1", "action": "view", "business_id": "b2"})
+
+        # FE upserts friend list: u1 -> [u2]
+        r = client.post(
+            "/social/friends/upsert",
+            json={"user_id": "u1", "friends": ["u2"]},
+        )
+        assert r.status_code == 200
+
+        # FE posts friend interaction on b2 with a strong weight
+        r = client.post(
+            "/social/interactions",
+            json={"user_id": "u2", "business_id": "b2", "action": "like", "weight": 10.0},
+        )
+        assert r.status_code == 200
+
+        # Without social: b1 should rank first (view-count score 2 > 1)
+        base = client.get("/recommendations/u1?topk=2")
+        assert base.status_code == 200
+        base_items = base.json()["items"]
+        assert base_items[0]["business_id"] == "b1"
+
+        # With social: b2 should be boosted and can outrank b1
+        rr = client.get("/recommendations/u1?topk=2&use_social=true&gamma=0.2")
+        assert rr.status_code == 200
+        items = rr.json()["items"]
+        assert items[0]["business_id"] == "b2"
+        assert "scoring" in items[0]

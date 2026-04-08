@@ -180,6 +180,71 @@ Danh sách business (array):
 { "processed": 1 }
 ```
 
+---
+
+## 6) Social re-ranking (FE gửi social graph + social interactions)
+
+Backend hỗ trợ social re-ranking dựa trên dữ liệu FE gửi lên.
+
+### 6.1 Upsert friend list
+
+`POST /social/friends/upsert`
+
+```json
+{
+  "user_id": "u1",
+  "friends": ["u2", "u3"],
+  "timestamp": "2026-04-09T10:00:00Z"
+}
+```
+
+Response:
+
+```json
+{ "user_id": "u1", "processed": 2 }
+```
+
+### 6.2 Gửi social interactions (friends → business)
+
+`POST /social/interactions`
+
+```json
+{
+  "user_id": "u2",
+  "business_id": "biz_abc",
+  "action": "visit",
+  "weight": 1.0,
+  "timestamp": "2026-04-09T10:02:00Z"
+}
+```
+
+`action` khuyến nghị: `view`, `visit`, `like`, `rate` (BE sẽ map default weight nếu FE không gửi `weight`).
+
+### 6.3 Bật social re-ranking khi lấy recommendation
+
+`GET /recommendations/{user_id}?topk=10&use_social=true&gamma=0.2`
+
+Khi bật social:
+- `score` sẽ trở thành `final_score`
+- response có thêm trường `scoring` để debug:
+
+```json
+{
+  "rank": 1,
+  "type": "business",
+  "business_id": "biz_abc",
+  "score": 0.8547,
+  "generated_at": "2026-04-09T10:03:00.000000",
+  "metadata": null,
+  "scoring": {
+    "emb_score": 0.9684,
+    "social_score": 0.4070,
+    "final_score": 0.8547,
+    "gamma": 0.2
+  }
+}
+```
+
 #### Ý nghĩa `items[]`
 
 - Hiện tại BE dùng heuristic đơn giản: đếm `business_id` xuất hiện nhiều nhất trong các log gần đây có `action == "view"`.

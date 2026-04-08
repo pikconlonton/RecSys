@@ -187,6 +187,35 @@ Format item vẫn giống (rank/type/business_id/score/generated_at) để FE kh
 
 ---
 
+## Social re-ranking (online, do FE gửi lên)
+
+Ngoài pipeline embedding/Faiss, service hỗ trợ **social re-ranking** dựa trên dữ liệu FE push lên.
+
+### FE cần gửi 2 loại dữ liệu
+
+1) Friend list:
+- `POST /social/friends/upsert`
+
+2) Social interactions (friends → business):
+- `POST /social/interactions`
+
+### Bật social khi gọi recommendations
+
+`GET /recommendations/{user_id}?topk=10&use_social=true&gamma=0.2`
+
+### Công thức
+
+- Friend weights (cách B):
+  - `w_f = softmax(cos(h_u, h_f) / τ)` với `τ = 0.1`
+- Social score:
+  - `social(u,b) = Σ_f w_f × interaction_weight(f,b)`
+- Final:
+  - `final = (1-γ) × emb_score + γ × social_score`
+
+Khi bật social, response items có thêm trường `scoring` để debug (emb/social/final).
+
+---
+
 ## Response contract của `GET /recommendations/{user_id}`
 
 Response 200:

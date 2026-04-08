@@ -35,3 +35,29 @@ class Business(Base):
 
     def __repr__(self):
         return f"<Business(business_id={self.business_id}, name={self.name})>"
+
+
+class SocialFriend(Base):
+    """Directed friend edge from FE: user_id -> friend_id."""
+
+    __tablename__ = "social_friends"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    friend_id = Column(String, index=True, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SocialInteraction(Base):
+    """Social interaction history from FE (any user, incl. friends): user -> business."""
+
+    __tablename__ = "social_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    business_id = Column(String, index=True, nullable=False)
+
+    action = Column(String, index=True, nullable=False)
+    weight = Column(Float, nullable=False, default=1.0)
+
+    timestamp = Column(DateTime, default=datetime.utcnow)
