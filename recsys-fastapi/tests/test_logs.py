@@ -56,3 +56,67 @@ def test_get_recent_logs_empty():
         response = client.get("/logs/recent/")
     assert response.status_code == 404
     assert response.json() == {"detail": "No logs found"}
+
+
+def test_recommendations_with_injected_artefacts():
+    # This test avoids loading the big real outputs/*.
+    # Instead, we inject a tiny artefact set and verify the endpoint returns
+    # business_ids from Faiss search (excluding the session item).
+    import numpy as np
+    import torch
+    import faiss
+
+    from app.services.artefacts import RecSysArtefacts
+    from app.services.recommender import recommender_service
+
+    user_h = torch.tensor([[1.0, 0.0]], dtype=torch.float32)  # one user
+    biz_h = torch.tensor(
+        [
+            [1.0, 0.0],  # b1 (same as user)
+            [0.9, 0.1],  # b2
+            [0.0, 1.0],  # b3 (orthogonal)
+        ],
+        dtype=torch.float32,
+    )
+    biz_np = biz_h.numpy().astype("float32")
+    faiss.normalize_L2(biz_np)
+    index = faiss.IndexFlatIP(biz_np.shape[1])
+    index.add(biz_np)
+
+    artefacts = RecSysArtefacts(
+        user_h=user_h,
+        biz_h=biz_h,
+        index=index,
+        user2idx={"1": 0},
+    # In current API, Log.business_id is an app-level string; user_id is int.
+    # For this test we keep business IDs simple and consistent.
+    biz2idx={"1": 0, "2": 1, "3": 2},
+    idx2biz={0: "1", 1: "2", 2: "3"},
+    )
+    recommender_service.set_artefacts(artefacts)
+
+    with TestClient(app) as client:
+        # If the app lifespan preloaded the real outputs/* artefacts, clear them
+        # so our injected tiny artefacts are what's used.
+        try:
+            client.app.state.recommender_artefacts = None
+        except Exception:
+            pass
+
+    # Create a session view log on business "1" so recs should not include it.
+    r = client.post("/logs/", json={"user_id": 1, "action": "view", "business_id": "1"})
+    assert r.status_code == 200
+
+    rec = client.get("/recommendations/1?topk=2")
+    assert rec.status_code == 200
+    payload = rec.json()
+    assert str(payload["user_id"]) == "1"
+    assert payload["topk"] == 2
+    assert isinstance(payload["items"], list)
+
+    # Ensure it returns business ids and excludes the session item.
+    returned = [it["business_id"] for it in payload["items"]]
+    assert "1" not in returned
+    assert len(returned) >= 1
+    # Should recommend a non-seen business.
+    assert returned[0] in {"2", "3"}

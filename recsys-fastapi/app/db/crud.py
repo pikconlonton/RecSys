@@ -6,6 +6,10 @@ from app.schemas.logs import LogCreate
 def create_log(db: Session, log: LogCreate):
     # pydantic v2: prefer model_dump; v1: fallback to dict
     data = log.model_dump() if hasattr(log, "model_dump") else log.dict()
+    # Store user_id as string (DB column is String); keep consistent for filtering.
+    if "user_id" in data and data["user_id"] is not None:
+        data["user_id"] = str(data["user_id"])
+
     db_log = Log(**data)
     db.add(db_log)
     db.commit()

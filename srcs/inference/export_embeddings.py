@@ -33,11 +33,11 @@ from collections import defaultdict
 # Config — phải khớp với training config
 # ══════════════════════════════════════════════════════════════════════════════
 DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-GRAPH_PATH = Path("D:/RecSys/outputs/embedded_graph.pt")  # Graph với 384-dim features
-UB_PATH    = Path("D:/RecSys/outputs/edges_user_business.txt")
-BB_PATH    = Path("D:/RecSys/outputs/edges_business_business_similar.txt")
-CKPT_PATH  = Path("D:/RecSys/outputs/ckpt1/best.pt")      # Best checkpoint từ training
-OUT_DIR    = Path("D:/RecSys/outputs")
+GRAPH_PATH = Path("../../outputs/embedded_graph.pt")  # Graph với 384-dim features
+UB_PATH    = Path("../../outputs/edges_user_business.txt")
+BB_PATH    = Path("../../outputs/edges_business_business_similar.txt")
+CKPT_PATH  = Path("../../outputs/ckpt1/best.pt")      # Best checkpoint từ training
+OUT_DIR    = Path("../../outputs")
 
 # Model hyperparameters (PHẢI GIỐNG training notebook)
 IN_DIM     = 384   # SentenceTransformer output dimension

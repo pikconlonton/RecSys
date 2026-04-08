@@ -8,3 +8,6 @@ alembic
 httpx
 python-dotenv
 schedule
+torch
+faiss-cpu
+numpy

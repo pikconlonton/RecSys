@@ -20,7 +20,7 @@ from pathlib import Path
 # ══════════════════════════════════════════════════════════════════════════════
 # Paths
 # ══════════════════════════════════════════════════════════════════════════════
-OUT_DIR  = Path("D:/RecSys/outputs")
+OUT_DIR  = Path("../../outputs")
 BIZ_PATH = OUT_DIR / "biz_h.pt"       # Embedding đã export từ GNN
 IDX_PATH = OUT_DIR / "faiss_biz.index"  # Sẽ lưu Faiss index tại đây
 

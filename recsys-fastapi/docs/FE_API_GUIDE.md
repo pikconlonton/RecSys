@@ -2,6 +2,12 @@
 
 Tài liệu này dành cho team FE để gọi API của service `recsys-fastapi`.
 
+## Recommendation pipeline (chi tiết)
+
+Nếu bạn cần hiểu "call API vào thì hệ thống tính recommendation như nào" (logs → session buffer → Faiss/heuristic → response), xem thêm:
+
+- `docs/RECOMMENDATION_PIPELINE.md`
+
 ## Base URL
 
 - Local: `http://localhost:8000`

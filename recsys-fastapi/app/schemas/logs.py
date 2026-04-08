@@ -1,14 +1,16 @@
-from pydantic import BaseModel
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from pydantic import BaseModel, ConfigDict, Field
 
 class LogCreate(BaseModel):
     user_id: int
     business_id: str
     action: str
-    timestamp: datetime = datetime.now()
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Log(LogCreate):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

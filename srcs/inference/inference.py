@@ -39,9 +39,9 @@ from collections import defaultdict
 # ══════════════════════════════════════════════════════════════════════════════
 # Paths & Config
 # ══════════════════════════════════════════════════════════════════════════════
-OUT_DIR   = Path("D:/RecSys/outputs")
-UB_PATH   = Path("D:\RecSys\outputs\graph\edges_user_business.txt")  # Lịch sử user-business
-BIZ_JSON  = Path("D:/RecSys/Yelp-JSON/Yelp JSON/yelp_dataset/yelp_academic_dataset_business.json")
+OUT_DIR   = Path("../../outputs")
+UB_PATH   = Path("../../outputs/graph/edges_user_business.txt")  # Lịch sử user-business
+BIZ_JSON  = Path("../../Yelp-JSON/Yelp JSON/yelp_dataset/yelp_academic_dataset_business.json")
 ALPHA     = 0.4  # Trọng số user_h vs session — 0.4 nghĩa session chiếm 60%
 
 

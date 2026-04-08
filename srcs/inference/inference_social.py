@@ -48,10 +48,10 @@ from collections import defaultdict
 # ══════════════════════════════════════════════════════════════════════════════
 # PATHS — Chỉnh lại nếu cấu trúc thư mục khác
 # ══════════════════════════════════════════════════════════════════════════════
-OUT_DIR  = Path("D:/RecSys/outputs")
-UB_PATH  = Path("D:/RecSys/outputs/graph/edges_user_business.txt")   # user→business edges
-UU_PATH  = Path("D:/RecSys/outputs/graph/edges_user_user.txt")       # user→user friend edges
-BIZ_JSON = Path("D:/RecSys/Yelp-JSON/Yelp JSON/yelp_dataset/yelp_academic_dataset_business.json")
+OUT_DIR  = Path("../../outputs")
+UB_PATH  = Path("../../outputs/graph/edges_user_business.txt")   # user→business edges
+UU_PATH  = Path("../../outputs/graph/edges_user_user.txt")       # user→user friend edges
+BIZ_JSON = Path("../../Yelp-JSON/Yelp JSON/yelp_dataset/yelp_academic_dataset_business.json")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DEFAULT HYPERPARAMETERS
