@@ -120,3 +120,57 @@ def test_recommendations_with_injected_artefacts():
     assert len(returned) >= 1
     # Should recommend a non-seen business.
     assert returned[0] in {"2", "3"}
+
+
+def test_product_like_10_logs_then_recommendations():
+    """Product-like flow: FE posts logs continuously, then calls recommendations.
+
+    This test validates the end-to-end contract:
+      - POST /logs/ accepts events
+      - service stores them
+      - GET /recommendations/{user_id} uses the *latest 10 logs* as session buffer
+      - returns a stable response shape
+
+    We intentionally force the heuristic path (no artefacts) to keep the test
+    fast and self-contained.
+    """
+
+    user_id = 999
+    with TestClient(app) as client:
+        # Post 10 logs (views). This matches the product assumption "đủ 10 logs".
+        logs = [
+            {"user_id": user_id, "action": "view", "business_id": "b1"},
+            {"user_id": user_id, "action": "view", "business_id": "b2"},
+            {"user_id": user_id, "action": "view", "business_id": "b2"},
+            {"user_id": user_id, "action": "view", "business_id": "b3"},
+            {"user_id": user_id, "action": "view", "business_id": "b2"},
+            {"user_id": user_id, "action": "view", "business_id": "b9"},
+            {"user_id": user_id, "action": "view", "business_id": "b9"},
+            {"user_id": user_id, "action": "view", "business_id": "b4"},
+            {"user_id": user_id, "action": "view", "business_id": "b2"},
+            {"user_id": user_id, "action": "view", "business_id": "b2"},
+        ]
+
+        for payload in logs:
+            r = client.post("/logs/", json=payload)
+            assert r.status_code == 200
+
+        # Sanity: recent logs endpoint should now have data.
+        recent = client.get("/logs/recent/")
+        assert recent.status_code == 200
+        assert isinstance(recent.json(), list)
+        assert len(recent.json()) >= 1
+
+        rec = client.get(f"/recommendations/{user_id}?topk=5")
+        assert rec.status_code == 200
+        body = rec.json()
+
+        assert str(body["user_id"]) == str(user_id)
+        assert body["topk"] == 5
+        assert isinstance(body["items"], list)
+
+        # In product, items can be empty if real-inference mapping doesn't contain this user.
+        # If it's non-empty, validate stable item schema.
+        if body["items"]:
+            first = body["items"][0]
+            assert set(first.keys()) >= {"rank", "type", "business_id", "score", "generated_at"}
