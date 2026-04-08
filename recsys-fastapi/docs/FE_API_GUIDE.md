@@ -41,7 +41,7 @@ Nếu bạn cần hiểu "call API vào thì hệ thống tính recommendation n
 
 ```json
 {
-  "user_id": 123,
+  "user_id": "123",
   "action": "view",
   "business_id": "biz_abc",
   "timestamp": "2026-04-08T12:30:00Z"
@@ -50,7 +50,7 @@ Nếu bạn cần hiểu "call API vào thì hệ thống tính recommendation n
 
 #### Field rules
 
-- `user_id` (int): id user.
+- `user_id` (string): id user.
 - `action` (string): tên hành vi. Hiện recommender dùng mạnh nhất là `"view"`.
 - `business_id` (string): id business/item.
 - `timestamp` (string ISO-8601, optional): nếu FE không gửi thì BE tự set thời gian hiện tại.
@@ -62,7 +62,7 @@ Trả về log đã lưu (có thêm `id`).
 ```json
 {
   "id": 1,
-  "user_id": 123,
+  "user_id": "123",
   "business_id": "biz_abc",
   "action": "view",
   "timestamp": "2026-04-08T12:30:00Z"
@@ -122,7 +122,7 @@ Khi chưa có log.
 
 ```json
 {
-  "user_id": 123,
+  "user_id": "123",
   "topk": 5,
   "items": [
     {
@@ -130,10 +130,54 @@ Khi chưa có log.
       "type": "business",
       "business_id": "biz_abc",
       "score": 3.0,
-      "generated_at": "2026-04-08T12:31:00.000000"
+      "generated_at": "2026-04-08T12:31:00.000000",
+      "metadata": {
+        "name": "Pizza Palace",
+        "stars": 4.5,
+        "review_count": 624,
+        "categories": "Pizza, Italian",
+        "address": "123 Market St",
+        "lat": 39.9526,
+        "lng": -75.1652
+      }
     }
   ]
 }
+```
+
+> `metadata` có thể là `null` nếu hệ thống chưa có thông tin business trong DB.
+
+---
+
+## 5) Upsert business metadata
+
+### `POST /businesses/upsert`
+
+**Mục đích**: FE/backoffice đẩy thông tin business vào DB để BE join/enrich output recommendations.
+
+### Request body
+
+Danh sách business (array):
+
+```json
+[
+  {
+    "business_id": "biz_abc",
+    "name": "Pizza Palace",
+    "stars": 4.5,
+    "review_count": 624,
+    "categories": "Pizza, Italian",
+    "address": "123 Market St",
+    "lat": 39.9526,
+    "lng": -75.1652
+  }
+]
+```
+
+### Response 200
+
+```json
+{ "processed": 1 }
 ```
 
 #### Ý nghĩa `items[]`
@@ -170,7 +214,7 @@ await fetch('http://localhost:8000/logs/', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    user_id: 123,
+  user_id: '123',
     action: 'view',
     business_id: 'biz_abc',
     timestamp: new Date().toISOString(),

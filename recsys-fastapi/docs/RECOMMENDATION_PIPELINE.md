@@ -23,7 +23,7 @@ Payload (chuẩn cho recommender):
 
 ```json
 {
-  "user_id": 123,
+  "user_id": "123",
   "action": "view",
   "business_id": "<yelp_business_id>",
   "timestamp": "2026-04-08T12:30:00Z"
@@ -85,13 +85,11 @@ Cấu hình đường dẫn:
 ### User ID mapping (rất quan trọng)
 
 Trong code hiện tại:
-- API nhận `user_id` là **int** (path param)
-- Khi lookup trong artefacts, BE dùng **`str(user_id)`**:
-  - ví dụ FE gọi `/recommendations/1` → lookup `"1"` trong `artefacts.user2idx`
+- API nhận `user_id` là **string** (path param và ở log payload)
+- Khi lookup trong artefacts, BE dùng **`user_id`** (string) để tra `artefacts.user2idx`
 
-Vì vậy có 2 cách để production chạy “real inference” đúng:
-1) **Artefacts phải chứa key dạng string của số** (`"1"`, `"2"`, ...)
-2) Hoặc bạn đổi contract API để FE gửi `user_id` theo Yelp string id (khuyến nghị dài hạn, nhưng sẽ cần đổi schema).
+Vì vậy để production chạy “real inference” đúng:
+- `user2idx` trong artefacts phải chứa key trùng với `user_id` mà FE gửi.
 
 ### Thuật toán thực thi (tóm tắt)
 
@@ -131,8 +129,43 @@ Mỗi item trả về có dạng:
   "type": "business",
   "business_id": "<yelp_business_id>",
   "score": 0.8123,
-  "generated_at": "2026-04-08T12:31:00.000000"
+  "generated_at": "2026-04-08T12:31:00.000000",
+  "metadata": {
+    "name": "Pizza Palace",
+    "stars": 4.5,
+    "review_count": 624,
+    "categories": "Pizza, Italian",
+    "address": "123 Market St",
+    "lat": 39.9526,
+    "lng": -75.1652
+  }
 }
+```
+
+Notes:
+- `metadata` được join từ bảng `businesses` trong DB.
+- Nếu chưa có metadata cho `business_id` thì `metadata` sẽ là `null`.
+
+### Upsert business metadata
+
+Endpoint:
+- `POST /businesses/upsert`
+
+Payload:
+
+```json
+[
+  {
+    "business_id": "biz_abc",
+    "name": "Pizza Palace",
+    "stars": 4.5,
+    "review_count": 624,
+    "categories": "Pizza, Italian",
+    "address": "123 Market St",
+    "lat": 39.9526,
+    "lng": -75.1652
+  }
+]
 ```
 
 Giải thích:
@@ -168,7 +201,8 @@ Response 200:
       "type": "business",
       "business_id": "biz_abc",
       "score": 0.81,
-      "generated_at": "2026-04-08T12:31:00.000000"
+  "generated_at": "2026-04-08T12:31:00.000000",
+  "metadata": null
     }
   ]
 }
@@ -208,6 +242,7 @@ Kiểm tra:
 - DB có log `view` cho user chưa?
 - `business_id` có map được trong `mappings.pt` không?
 - `user_id` có trong `user2idx` không? (hiện lookup theo `str(user_id)`)
+- `user_id` có trong `user2idx` không? (hiện lookup theo string `user_id`)
 
 ### 2) Service chạy nhưng không có real inference
 

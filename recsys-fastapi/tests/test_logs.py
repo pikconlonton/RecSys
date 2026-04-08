@@ -174,3 +174,44 @@ def test_product_like_10_logs_then_recommendations():
         if body["items"]:
             first = body["items"][0]
             assert set(first.keys()) >= {"rank", "type", "business_id", "score", "generated_at"}
+    
+def test_recommendations_enriched_with_business_metadata():
+    user_id = "u_meta"
+
+    with TestClient(app) as client:
+        # Upsert business metadata
+        upsert_res = client.post(
+            "/businesses/upsert",
+            json=[
+                {
+                    "business_id": "b_meta_1",
+                    "name": "Biz Meta 1",
+                    "stars": 4.2,
+                    "review_count": 12,
+                    "categories": "Cafe",
+                    "address": "123 Test St",
+                    "lat": 10.5,
+                    "lng": 20.5,
+                }
+            ],
+        )
+        assert upsert_res.status_code == 200
+
+        # Create a log so heuristic fallback will recommend this business_id
+        log_res = client.post(
+            "/logs/",
+            json={"user_id": user_id, "business_id": "b_meta_1", "action": "view"},
+        )
+        assert log_res.status_code == 200
+
+        rec_res = client.get(f"/recommendations/{user_id}?topk=5")
+        assert rec_res.status_code == 200
+        data = rec_res.json()
+        assert "items" in data
+
+        if data["items"]:
+            first = data["items"][0]
+            assert "metadata" in first
+            # If the heuristic path returns the same business_id, metadata must be present.
+            if first.get("business_id") == "b_meta_1":
+                assert first["metadata"]["name"] == "Biz Meta 1"

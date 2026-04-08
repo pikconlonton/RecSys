@@ -1,81 +1,44 @@
-# FastAPI User Action Logging Project
+# RecSys FastAPI
 
-This project is a FastAPI application designed to log user actions to a PostgreSQL database and retrieve the 10 most recent logs for user behavior analysis. The application is structured to facilitate easy development and maintenance.
+FastAPI backend cho dự án Recommendation System.
 
-## Project Structure
+Service cung cấp:
+- Gửi/đọc logs hành vi user (lưu DB).
+- Gọi recommendations theo `user_id`.
+- (Mới) Upsert metadata cho business để **enrich** output recommendations với `items[].metadata`.
 
-```
-recsys-fastapi
-├── app
-│   ├── main.py                # Entry point of the FastAPI application
-│   ├── api
-│   │   ├── __init__.py        # Marks the api directory as a package
-│   │   └── logs.py            # API endpoints for logging user actions
-│   ├── core
-│   │   ├── __init__.py        # Marks the core directory as a package
-│   │   └── config.py          # Configuration settings for the application
-│   ├── db
-│   │   ├── __init__.py        # Marks the db directory as a package
-│   │   ├── session.py         # Manages database session and connection
-│   │   ├── models.py          # Defines database models for logging
-│   │   └── crud.py            # Functions for creating and retrieving logs
-│   ├── schemas
-│   │   └── logs.py            # Pydantic schemas for validating log data
-│   ├── services
-│   │   └── logger.py          # Logging service for user actions
-│   └── utils
-│       └── scheduler.py       # Scheduler for fetching recent logs
-├── tests
-│   └── test_logs.py           # Unit tests for logging functionality
-├── alembic
-│   ├── env.py                 # Database migrations setup
-│   └── versions               # Migration scripts directory
-├── .env                       # Environment variables for the application
-├── Dockerfile                 # Instructions to build a Docker image
-├── requirements.txt           # Project dependencies
-├── pyproject.toml            # Project configuration
-└── README.md                  # Project documentation
-```
+## Docs cho FE
 
-## Installation
-
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd recsys-fastapi
-   ```
-
-2. Create a virtual environment and activate it:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
-
-3. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. Set up the PostgreSQL database and update the `.env` file with your database credentials.
-
-## Usage
-
-1. Run the FastAPI application:
-   ```
-   uvicorn app.main:app --reload
-   ```
-
-2. Access the API documentation at `http://127.0.0.1:8000/docs`.
-
-## Features
-
-
-## Contributing
- 
 - FE calling guide: [`docs/FE_API_GUIDE.md`](docs/FE_API_GUIDE.md)
+- Recommendation pipeline: [`docs/RECOMMENDATION_PIPELINE.md`](docs/RECOMMENDATION_PIPELINE.md)
 
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+## API tóm tắt
 
-## License
+> `user_id` hiện là **string** end-to-end.
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+- `GET /` health check
+- `POST /logs/` ghi log
+- `GET /logs/recent/` đọc 10 logs gần nhất
+- `GET /recommendations/{user_id}?topk=10` lấy recommendations (mỗi item có thêm `metadata` nếu có)
+- `POST /businesses/upsert` upsert business metadata
+
+## Chạy local
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Mở swagger:
+- `http://127.0.0.1:8000/docs`
+
+## Env vars quan trọng
+
+- `DATABASE_URL` (ví dụ Postgres):
+   - `postgresql+psycopg2://user:pass@host:5432/dbname`
+- `RECSYS_OUTPUTS_DIR` (optional): trỏ tới thư mục `outputs/` để bật real inference (torch + faiss).
+
+## Testing
+
+```bash
+pytest -q
+```

@@ -20,8 +20,9 @@ class Log(Base):
 class Business(Base):
     __tablename__ = "businesses"
 
-    # Yelp business_id is a string
+    # Yelp business_id is a stable string id
     business_id = Column(String, primary_key=True, index=True)
+
     name = Column(String, nullable=True)
     stars = Column(Float, nullable=True)
     review_count = Column(Integer, nullable=True)
@@ -31,3 +32,6 @@ class Business(Base):
     lng = Column(Float, nullable=True)
 
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Business(business_id={self.business_id}, name={self.name})>"
