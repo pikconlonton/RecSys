@@ -17,6 +17,52 @@ Nếu bạn cần hiểu "call API vào thì hệ thống tính recommendation n
 
 ---
 
+## 0) (Dev) Seed dữ liệu SQLite để demo nhanh
+
+Nếu bạn muốn vừa chạy API lên là có sẵn dữ liệu để thử (logs/business/social), backend có script seed SQLite.
+
+### Yêu cầu
+
+- Đã tạo venv và cài deps trong `recsys-fastapi/`.
+- Có file dataset edges: `../outputs/graph/edges_user_business.txt` (đã có sẵn trong monorepo này).
+
+### Seed DB
+
+Chạy trong thư mục `recsys-fastapi/`:
+
+```bash
+source .venv/bin/activate
+
+# Seed vào file sqlite ./test.db (khuyến nghị để không đè app.db nếu bạn đang dùng)
+DATABASE_URL=sqlite:///./test.db python scripts/seed_db.py
+```
+
+Script sẽ:
+
+- recreate schema (drop/create)
+- seed `logs` (view), `businesses` (metadata tối thiểu), `social_friends`, `social_interactions`
+- in ra `main_user_for_social` và `boost_business_id` để bạn demo social nhanh
+
+### Chạy API dùng DB vừa seed
+
+```bash
+source .venv/bin/activate
+DATABASE_URL=sqlite:///./test.db uvicorn app.main:app --reload
+```
+
+Mở swagger:
+
+- `http://127.0.0.1:8000/docs`
+
+### Gọi nhanh để kiểm tra
+
+- `GET /logs/recent/` (phải trả về list 10 logs)
+- `GET /recommendations/{main_user_for_social}?topk=10&use_social=true&gamma=0.7`
+
+> Lưu ý: social re-ranking là best-effort, chỉ có tác dụng khi candidate list có overlap với các business mà friends đã tương tác.
+
+---
+
 ## 1) Health check
 
 ### `GET /`
