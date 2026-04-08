@@ -1,0 +1,10 @@
+FastAPI
+uvicorn
+sqlalchemy
+asyncpg
+psycopg[binary]
+pydantic
+alembic
+httpx
+python-dotenv
+schedule
