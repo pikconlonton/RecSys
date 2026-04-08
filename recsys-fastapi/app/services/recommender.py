@@ -34,7 +34,7 @@ class RecommenderService:
     def set_artefacts(self, artefacts: RecSysArtefacts) -> None:
         self._artefacts = artefacts
 
-    def recommend(self, db: Session, user_id: int | None, topk: int = 10) -> list[dict[str, Any]]:
+    def recommend(self, db: Session, user_id: str | None, topk: int = 10) -> list[dict[str, Any]]:
         # Pull recent logs for that user. If for any reason the filter returns
         # empty but data exists (e.g., legacy rows), fall back to global recent.
         logs = crud.get_recent_logs(db=db, limit=self.recent_log_limit, user_id=user_id)
@@ -48,11 +48,10 @@ class RecommenderService:
         if self._artefacts is not None and user_id is not None:
             recent_views = [l.business_id for l in logs if l.action == "view" and l.business_id]
 
-            # BE user_id is int; artefacts may use Yelp string IDs.
-            # We currently store user_id as stringified int in DB, so try that.
+            # user_id is a string in the API contract; artefacts use string keys.
             recs = recommend_from_recent_views(
                 artefacts=self._artefacts,
-                user_id=str(user_id),
+                user_id=user_id,
                 recent_business_ids=recent_views,
                 topk=topk,
                 config=self._cfg,

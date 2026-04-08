@@ -11,7 +11,7 @@ router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
 @router.get("/{user_id}")
-def get_recommendations(user_id: int, topk: int = 10, db: Session = Depends(get_db)):
+def get_recommendations(user_id: str, topk: int = 10, db: Session = Depends(get_db)):
     """Return recommendations for FE.
 
     Current implementation uses the latest logs and returns a ranked list.

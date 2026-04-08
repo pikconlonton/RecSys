@@ -10,7 +10,7 @@ from app.db.models import Log
 @pytest.fixture
 def log_data():
     return {
-        "user_id": 1,
+    "user_id": "u1",
         "action": "test_action",
     "business_id": "biz_1",
         "timestamp": "2023-10-01T12:00:00Z"
@@ -28,7 +28,7 @@ def test_get_recent_logs():
         # Arrange: create one log so recent endpoint returns data.
         response_create = client.post(
             "/logs/",
-            json={"user_id": 1, "action": "view", "business_id": "biz_1"},
+            json={"user_id": "u1", "action": "view", "business_id": "biz_1"},
         )
         assert response_create.status_code == 200
 
@@ -104,13 +104,13 @@ def test_recommendations_with_injected_artefacts():
             pass
 
     # Create a session view log on business "1" so recs should not include it.
-    r = client.post("/logs/", json={"user_id": 1, "action": "view", "business_id": "1"})
+    r = client.post("/logs/", json={"user_id": "1", "action": "view", "business_id": "1"})
     assert r.status_code == 200
 
     rec = client.get("/recommendations/1?topk=2")
     assert rec.status_code == 200
     payload = rec.json()
-    assert str(payload["user_id"]) == "1"
+    assert payload["user_id"] == "1"
     assert payload["topk"] == 2
     assert isinstance(payload["items"], list)
 
@@ -135,7 +135,7 @@ def test_product_like_10_logs_then_recommendations():
     fast and self-contained.
     """
 
-    user_id = 999
+    user_id = "u999"
     with TestClient(app) as client:
         # Post 10 logs (views). This matches the product assumption "đủ 10 logs".
         logs = [
@@ -165,7 +165,7 @@ def test_product_like_10_logs_then_recommendations():
         assert rec.status_code == 200
         body = rec.json()
 
-        assert str(body["user_id"]) == str(user_id)
+        assert body["user_id"] == user_id
         assert body["topk"] == 5
         assert isinstance(body["items"], list)
 

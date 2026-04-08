@@ -160,7 +160,7 @@ Response 200:
 
 ```json
 {
-  "user_id": 123,
+  "user_id": "123",
   "topk": 5,
   "items": [
     {
