@@ -211,11 +211,8 @@ Trong DB, backend có bảng `businesses` để lưu metadata của từng busin
 - `lng` (float, nullable)
 - `updated_at` (datetime)
 
-> Lưu ý: hiện **không có** bảng profile cho user. Backend chỉ lưu `user_id` dạng string trong các bảng:
-> - `logs` (hành vi)
-> - `social_friends` (friend graph)
-> - `social_interactions` (friend → business).
-> User info chi tiết (name, avatar, v.v.) FE/backoffice tự quản lý hệ thống khác nếu cần.
+> Lưu ý: thông tin user chi tiết (name/email/avatar) được lưu ở bảng `users` (xem thêm mục **7)**).
+> Các bảng `logs`, `social_friends`, `social_interactions` chỉ lưu `user_id` dạng string để tham chiếu tới user.
 
 ### 5.2 Upsert business metadata
 
@@ -378,6 +375,133 @@ Khi bật social:
 - `score` hiện là số lần xuất hiện (float).
 
 > Khi bạn tích hợp thuật toán recsys thật (Faiss/embeddings) thì format vẫn nên giữ ổn định để FE không phải đổi nhiều.
+
+---
+
+## 7) User profiles & APIs
+
+Backend cung cấp bảng `users` và một bộ API đơn giản để quản lý thông tin cơ bản của user.
+
+### 7.1 Cấu trúc bảng `users` trong DB
+
+- `user_id` (string, PK)
+- `name` (string, nullable)
+- `email` (string, nullable)
+- `avatar_url` (string, nullable)
+- `created_at` (datetime)
+- `updated_at` (datetime)
+
+Các bảng khác (`logs`, `social_friends`, `social_interactions`) reference user thông qua field `user_id` (string) này.
+
+### 7.2 Tạo user mới
+
+`POST /users/`
+
+Request body:
+
+```json
+{
+  "user_id": "u123",
+  "name": "Nguyen Van A",
+  "email": "u123@example.com",
+  "avatar_url": "https://example.com/avatar.png"
+}
+```
+
+Response 200:
+
+```json
+{
+  "user_id": "u123",
+  "name": "Nguyen Van A",
+  "email": "u123@example.com",
+  "avatar_url": "https://example.com/avatar.png",
+  "created_at": "2026-04-09T10:00:00Z",
+  "updated_at": "2026-04-09T10:00:00Z"
+}
+```
+
+> Lưu ý: service hiện không enforce unique email; uniqueness được đảm bảo bởi `user_id`.
+
+### 7.3 Lấy danh sách user
+
+`GET /users/`
+
+Query params:
+
+- `skip` (int, default = 0)
+- `limit` (int, default = 100)
+
+Response 200:
+
+```json
+[
+  {
+    "user_id": "u123",
+    "name": "Nguyen Van A",
+    "email": "u123@example.com",
+    "avatar_url": "https://example.com/avatar.png",
+    "created_at": "2026-04-09T10:00:00Z",
+    "updated_at": "2026-04-09T10:00:00Z"
+  }
+]
+```
+
+### 7.4 Lấy chi tiết 1 user
+
+`GET /users/{user_id}`
+
+Response 200:
+
+```json
+{
+  "user_id": "u123",
+  "name": "Nguyen Van A",
+  "email": "u123@example.com",
+  "avatar_url": "https://example.com/avatar.png",
+  "created_at": "2026-04-09T10:00:00Z",
+  "updated_at": "2026-04-09T10:00:00Z"
+}
+```
+
+Response 404:
+
+```json
+{ "detail": "User not found" }
+```
+
+### 7.5 Cập nhật user
+
+`PUT /users/{user_id}`
+
+Request body (partial update – chỉ field có gửi mới được cập nhật):
+
+```json
+{
+  "name": "Nguyen Van B",
+  "email": "new_email@example.com"
+}
+```
+
+Response 200: giống schema user detail, với giá trị mới.
+
+Response 404 khi `user_id` không tồn tại.
+
+### 7.6 Xoá user
+
+`DELETE /users/{user_id}`
+
+Response 200:
+
+```json
+{ "deleted": true }
+```
+
+Response 404 khi user không tồn tại:
+
+```json
+{ "detail": "User not found" }
+```
 
 ---
 

@@ -6,6 +6,7 @@ from app.api import logs
 from app.api import businesses
 from app.api import recommendations
 from app.api import social
+from app.api import users
 from app.db.session import Base, engine, DATABASE_URL
 from app.db import models  # noqa: F401
 from app.services.artefacts import load_artefacts
@@ -51,6 +52,7 @@ app.include_router(logs.router)
 app.include_router(businesses.router)
 app.include_router(recommendations.router)
 app.include_router(social.router)
+app.include_router(users.router)
 
 @app.get("/")
 def read_root():

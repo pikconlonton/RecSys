@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 
-from app.db.models import Business, Log, SocialFriend, SocialInteraction
+from app.db.models import Business, Log, SocialFriend, SocialInteraction, User as UserModel
 from app.schemas.logs import LogCreate
+from app.schemas.users import UserCreate
 
 
 def create_log(db: Session, log: LogCreate):
@@ -19,11 +20,82 @@ def create_log(db: Session, log: LogCreate):
     return db_log
 
 
+def create_user(db: Session, payload: UserCreate) -> UserModel:
+    """Create a new user profile.
+
+    If you need idempotent semantics on user_id, handle it at API level
+    (e.g. check get_user before create).
+    """
+
+    data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    # Keep user_id as string consistently across the system.
+    data["user_id"] = str(data["user_id"])
+
+    obj = UserModel(**data)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
 def get_recent_logs(db: Session, limit: int = 10, user_id: str | None = None):
     q = db.query(Log)
     if user_id is not None:
         q = q.filter(Log.user_id == user_id)
     return q.order_by(Log.timestamp.desc()).limit(limit).all()
+
+
+def get_user(db: Session, user_id: str) -> UserModel | None:
+    if not user_id:
+        return None
+    return db.get(UserModel, str(user_id))
+
+
+def list_users(db: Session, skip: int = 0, limit: int = 100) -> list[UserModel]:
+    q = db.query(UserModel).order_by(UserModel.user_id)
+    if skip:
+        q = q.offset(skip)
+    if limit:
+        q = q.limit(limit)
+    return q.all()
+
+
+def update_user(db: Session, user_id: str, payload) -> UserModel | None:
+    """Update an existing user.
+
+    Expects a Pydantic model or dict-like object with `dict`/`model_dump`.
+    Only provided fields are updated.
+    """
+
+    obj = get_user(db, user_id)
+    if obj is None:
+        return None
+
+    if hasattr(payload, "model_dump"):
+        data = payload.model_dump(exclude_unset=True)
+    else:
+        data = payload.dict(exclude_unset=True) if hasattr(payload, "dict") else dict(payload)
+
+    # Never change primary key via update payload.
+    data.pop("user_id", None)
+
+    for field, value in data.items():
+        setattr(obj, field, value)
+
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def delete_user(db: Session, user_id: str) -> bool:
+    obj = get_user(db, user_id)
+    if obj is None:
+        return False
+
+    db.delete(obj)
+    db.commit()
+    return True
 
 
 def upsert_businesses(db: Session, businesses: list[dict]) -> int:
