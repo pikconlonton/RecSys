@@ -68,7 +68,15 @@ def main() -> int:
         sys.path.insert(0, str(project_root))
 
     # Local imports so they see the adjusted sys.path
-    from app.db.models import Business, Log, SocialFriend, SocialInteraction, User
+    from app.db.models import (
+        Business,
+        BusinessPhoto,
+        Log,
+        Photo,
+        SocialFriend,
+        SocialInteraction,
+        User,
+    )
     from app.db.session import Base, SessionLocal, engine
 
     # Ensure schema exists (mirrors app lifespan behavior)
@@ -132,6 +140,15 @@ def main() -> int:
             )
         db.commit()
 
+        # Seed photos: tạo 2 ảnh giả cho mỗi business và gắn mapping N-N
+        for bid in businesses:
+            for idx in range(1, 3):
+                photo_id = f"{bid}_p{idx}"
+                path = f"https://example.com/images/{bid}_{idx}.jpg"
+                db.add(Photo(photo_id=photo_id, path=path))
+                db.add(BusinessPhoto(business_id=bid, photo_id=photo_id))
+        db.commit()
+
         # Seed logs: ~120 view logs spread over users/businesses
         for i in range(120):
             u = random.choice(users)
@@ -173,7 +190,10 @@ def main() -> int:
 
         print("Seed complete")
         print(f"DATABASE_URL={os.getenv('DATABASE_URL', 'sqlite:///./test.db')}")
-        print(f"Seeded users={len(users)} businesses={len(businesses)}")
+        print(
+            f"Seeded users={len(users)} businesses={len(businesses)} "
+            f"photos={len(businesses) * 2}"
+        )
         print(f"main_user_for_social={main_user}")
         print(f"boost_business_id={boost_biz}")
 
