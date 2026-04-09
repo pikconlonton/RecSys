@@ -26,7 +26,7 @@ class RecommenderService:
             artifacts and mapping logic.
     """
 
-    def __init__(self, recent_log_limit: int = 10):
+    def __init__(self, recent_log_limit: int = 1):
         self.recent_log_limit = recent_log_limit
         self._artefacts: RecSysArtefacts | None = None
         self._cfg = InferenceConfig()
