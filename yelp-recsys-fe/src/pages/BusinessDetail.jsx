@@ -36,14 +36,9 @@ const BusinessDetail = () => {
                 // Lấy ID user từ context hoặc dùng fallback từ kết quả Seed
                 const userId = selectedUser?.user_id || "---r61b7EpVPkb4UVme5tA";
 
-                // Gọi song song API chi tiết quán và gợi ý cá nhân hóa
-                const [bizRes, recRes] = await Promise.all([
-                    businessService.getById(id),
-                    recService.getForUser(userId, { topk: 8, use_social: true, gamma: 0.2 })
-                ]);
-
+                // 1) Fetch business detail trước
+                const bizRes = await businessService.getById(id);
                 const bizData = bizRes?.data || bizRes;
-                const recData = recRes?.data || recRes;
 
                 if (bizData) {
                     setBusiness({
@@ -52,9 +47,18 @@ const BusinessDetail = () => {
                         longitude: bizData.lng ?? bizData.longitude,
                     });
 
-                    // Ghi nhận hành vi View lên Backend
-                    logService.sendViewLog(userId, id).catch(e => console.error("Log error:", e));
+                    // 2) Ghi nhận hành vi View lên Backend (await) để recs có thể phản ánh session vừa xem
+                    try {
+                        await logService.sendViewLog(userId, id);
+                    } catch (e) {
+                        // Nếu log fail vẫn cho FE xem recs (fallback)
+                        console.error("Log error:", e);
+                    }
                 }
+
+                // 3) Fetch recommendations sau khi log view (session-aware)
+                const recRes = await recService.getForUser(userId, { topk: 8, use_social: true, gamma: 0.2 });
+                const recData = recRes?.data || recRes;
 
                 // Map dữ liệu gợi ý từ trường .items hoặc .results
                 setTopKList(recData.items || recData.results || []);
