@@ -197,6 +197,11 @@ Khi chưa có log.
 - `user_id` (path param): id user.
 - `topk` (query param, optional, default = 10): số lượng item muốn lấy.
 
+Query params (tuỳ chọn thêm):
+
+- `debug` (int, default = 0)
+  - `debug=1`: response sẽ có thêm field `debug` để FE/BE debug nhanh pipeline (xem mục dưới).
+
 ### Example
 
 `GET /recommendations/123?topk=5`
@@ -207,6 +212,13 @@ Khi chưa có log.
 {
   "user_id": "123",
   "topk": 5,
+  "debug": {
+    "path": "faiss_user_only",
+    "has_artefacts": true,
+    "has_user_embedding": true,
+    "recent_log_limit": 10,
+    "recent_views_count": 0
+  },
   "items": [
     {
       "rank": 1,
@@ -226,6 +238,17 @@ Khi chưa có log.
     }
   ]
 }
+
+#### Debug mode (`?debug=1`) dùng để check “đang chạy nhánh nào?”
+
+Khi FE gọi: `GET /recommendations/{user_id}?topk=10&debug=1`, response sẽ có thêm:
+
+- `debug.path`:
+  - `faiss_user_only`: user **có embedding** và **không có log view gần đây** ⇒ truy xuất bằng **user vector**.
+  - `faiss_session`: user **có embedding** và **có log view gần đây** ⇒ truy xuất bằng **user vector + session vector**.
+  - `heuristic_db_fill`: user **không có embedding** (dù có thể tồn tại trong DB `users`) hoặc artefacts chưa load ⇒ fallback heuristic/DB-fill.
+
+Nếu bạn thấy nhiều user khác nhau nhưng recommendation giống nhau, hãy bật `debug=1` để xem có đang rơi vào `heuristic_db_fill` không.
 ```
 
 > `metadata` có thể là `null` nếu hệ thống chưa có thông tin business trong DB.

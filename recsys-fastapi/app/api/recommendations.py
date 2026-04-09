@@ -57,6 +57,7 @@ def get_recommendations(
     topk: int = 10,
     use_social: bool = False,
     gamma: float = 0.2,
+    debug: int = 0,
     db: Session = Depends(get_db),
 ):
     """Return recommendations for FE.
@@ -67,6 +68,31 @@ def get_recommendations(
     """
 
     items = recommender_service.recommend(db=db, user_id=user_id, topk=topk)
+
+    debug_payload = None
+    if debug:
+        # Derive which path was used without changing service contracts.
+        # NOTE: This is best-effort debug information for FE/dev only.
+        artefacts = getattr(recommender_service, "_artefacts", None)
+        has_artefacts = artefacts is not None
+        has_user_embedding = bool(has_artefacts and user_id in getattr(artefacts, "user2idx", {}))
+
+        # Recompute recent views count cheaply.
+        logs = crud.get_recent_logs(db=db, limit=getattr(recommender_service, "recent_log_limit", 10), user_id=user_id)
+        recent_views = [l.business_id for l in logs if l.action == "view" and l.business_id]
+
+        if has_user_embedding:
+            path = "faiss_session" if recent_views else "faiss_user_only"
+        else:
+            path = "heuristic_db_fill"
+
+        debug_payload = {
+            "path": path,
+            "has_artefacts": has_artefacts,
+            "has_user_embedding": has_user_embedding,
+            "recent_log_limit": int(getattr(recommender_service, "recent_log_limit", 10)),
+            "recent_views_count": int(len(recent_views)),
+        }
 
     # Optional: social reranking using FE-provided friends graph + interactions.
     # We keep backward compatibility: if disabled or no social signal, items unchanged.
@@ -164,8 +190,13 @@ def get_recommendations(
             }
         enriched_items.append({**it, "metadata": metadata})
 
-    return {
+    resp = {
         "user_id": user_id,
         "topk": topk,
         "items": enriched_items,
     }
+
+    if debug_payload is not None:
+        resp["debug"] = debug_payload
+
+    return resp
