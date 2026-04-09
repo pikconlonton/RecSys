@@ -26,7 +26,7 @@ class RecommenderService:
             artifacts and mapping logic.
     """
 
-    def __init__(self, recent_log_limit: int = 1):
+    def __init__(self, recent_log_limit: int = 10):
         self.recent_log_limit = recent_log_limit
         self._artefacts: RecSysArtefacts | None = None
         self._cfg = InferenceConfig()
@@ -82,6 +82,40 @@ class RecommenderService:
                     "generated_at": now,
                 }
             )
+
+        # IMPORTANT:
+        # `recent_log_limit` defines how many logs are used to build the *session signal*.
+        # It must NOT cap the number of recommendations returned.
+        # If the user has only 1 recent view (or recent_log_limit is small), the
+        # frequency-based heuristic may produce < topk unique business_ids. In that
+        # case, we top up from the Business table so FE always gets a full list.
+        if len(recs) < topk:
+            seen_ids = {r.get("business_id") for r in recs if isinstance(r, dict)}
+            seen_ids.update([bid for bid in viewed if bid])
+
+            # Pull a stable slice from DB (simple & portable). We can later improve this
+            # to sort by stars/review_count or add a dedicated "popular" table.
+            fill = crud.list_businesses(db=db, skip=0, limit=max(topk * 5, 100))
+
+            rank = len(recs)
+            for b in fill:
+                bid = str(getattr(b, "business_id", ""))
+                if not bid or bid in seen_ids:
+                    continue
+                rank += 1
+                recs.append(
+                    {
+                        "rank": rank,
+                        "type": "business",
+                        "business_id": bid,
+                        # 0.0 indicates "cold-start fill" in heuristic mode.
+                        "score": 0.0,
+                        "generated_at": now,
+                    }
+                )
+                if len(recs) >= topk:
+                    break
+
         return recs
 
 
