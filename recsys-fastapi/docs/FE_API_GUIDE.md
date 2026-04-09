@@ -19,7 +19,7 @@ Nếu bạn cần hiểu "call API vào thì hệ thống tính recommendation n
 
 ## 0) (Dev) Seed dữ liệu SQLite để demo nhanh
 
-Nếu bạn muốn vừa chạy API lên là có sẵn dữ liệu để thử (logs/business/social), backend có script seed SQLite.
+Nếu bạn muốn vừa chạy API lên là có sẵn dữ liệu để thử (users/logs/business/social), backend có script seed SQLite.
 
 ### Yêu cầu
 
@@ -40,7 +40,7 @@ DATABASE_URL=sqlite:///./test.db python scripts/seed_db.py
 Script sẽ:
 
 - recreate schema (drop/create)
-- seed `logs` (view), `businesses` (metadata tối thiểu), `social_friends`, `social_interactions`
+- seed `users` (basic profile), `logs` (view), `businesses` (metadata tối thiểu), `social_friends`, `social_interactions`
 - in ra `main_user_for_social` và `boost_business_id` để bạn demo social nhanh
 
 ### Chạy API dùng DB vừa seed

@@ -2,6 +2,7 @@
 """Seed local SQLite DB with sample data so you can demo the API quickly.
 
 Seeds:
+- users (basic profiles)
 - logs (views)
 - businesses (minimal metadata)
 - social friends
@@ -21,7 +22,7 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app.db.models import Business, Log, SocialFriend, SocialInteraction
+from app.db.models import Business, Log, SocialFriend, SocialInteraction, User
 from app.db.session import Base, SessionLocal, engine
 
 
@@ -62,7 +63,9 @@ def main() -> int:
 
     pairs = list(_iter_edges_user_business_sample(max_lines=300))
     if len(pairs) < 30:
-        raise RuntimeError("Not enough edges rows to seed. Increase max_lines or check file.")
+        raise RuntimeError(
+            "Not enough edges rows to seed. Increase max_lines or check file."
+        )
 
     users = list(dict.fromkeys([u for u, _ in pairs]))[:20]
     businesses = list(dict.fromkeys([b for _, b in pairs]))[:60]
@@ -76,6 +79,19 @@ def main() -> int:
         db.query(Business).delete()
         db.query(SocialFriend).delete()
         db.query(SocialInteraction).delete()
+        db.query(User).delete()
+        db.commit()
+
+        # Seed user profiles (basic fake data for each sampled user_id)
+        for i, uid in enumerate(users, start=1):
+            db.add(
+                User(
+                    user_id=uid,
+                    name=f"User {i}",
+                    email=f"{uid}@example.com",
+                    avatar_url="https://example.com/avatar.png",
+                )
+            )
         db.commit()
 
         # Seed businesses metadata
