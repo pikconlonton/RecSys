@@ -195,15 +195,35 @@ Khi chưa có log.
 
 ---
 
-## 5) Upsert business metadata
+## 5) Business metadata & APIs
 
-### `POST /businesses/upsert`
+### 5.1 Cấu trúc bảng `businesses` trong DB
+
+Trong DB, backend có bảng `businesses` để lưu metadata của từng business:
+
+- `business_id` (string, PK)
+- `name` (string, nullable)
+- `stars` (float, nullable)
+- `review_count` (int, nullable)
+- `categories` (string, nullable)
+- `address` (string, nullable)
+- `lat` (float, nullable)
+- `lng` (float, nullable)
+- `updated_at` (datetime)
+
+> Lưu ý: hiện **không có** bảng profile cho user. Backend chỉ lưu `user_id` dạng string trong các bảng:
+> - `logs` (hành vi)
+> - `social_friends` (friend graph)
+> - `social_interactions` (friend → business).
+> User info chi tiết (name, avatar, v.v.) FE/backoffice tự quản lý hệ thống khác nếu cần.
+
+### 5.2 Upsert business metadata
+
+`POST /businesses/upsert`
 
 **Mục đích**: FE/backoffice đẩy thông tin business vào DB để BE join/enrich output recommendations.
 
-### Request body
-
-Danh sách business (array):
+Request body – danh sách business (array):
 
 ```json
 [
@@ -220,10 +240,71 @@ Danh sách business (array):
 ]
 ```
 
-### Response 200
+Response 200:
 
 ```json
 { "processed": 1 }
+```
+
+### 5.3 Lấy danh sách business
+
+`GET /businesses/`
+
+**Mục đích**: FE/backoffice liệt kê business (đơn giản, phục vụ list/selector, debug, v.v.).
+
+Query params:
+
+- `skip` (int, default = 0) – offset bản ghi
+- `limit` (int, default = 100) – số bản ghi tối đa trả về
+
+Response 200:
+
+```json
+[
+  {
+    "business_id": "biz_abc",
+    "name": "Pizza Palace",
+    "stars": 4.5,
+    "review_count": 624,
+    "categories": "Pizza, Italian",
+    "address": "123 Market St",
+    "lat": 39.9526,
+    "lng": -75.1652,
+    "updated_at": "2026-04-09T10:00:00Z"
+  }
+]
+```
+
+### 5.4 Lấy chi tiết 1 business
+
+`GET /businesses/{business_id}`
+
+**Mục đích**: FE/backoffice lấy chi tiết metadata cho 1 business (thường dùng ở trang detail).
+
+Path param:
+
+- `business_id` (string)
+
+Response 200:
+
+```json
+{
+  "business_id": "biz_abc",
+  "name": "Pizza Palace",
+  "stars": 4.5,
+  "review_count": 624,
+  "categories": "Pizza, Italian",
+  "address": "123 Market St",
+  "lat": 39.9526,
+  "lng": -75.1652,
+  "updated_at": "2026-04-09T10:00:00Z"
+}
+```
+
+Response 404:
+
+```json
+{ "detail": "Business not found" }
 ```
 
 ---

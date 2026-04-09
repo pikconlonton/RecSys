@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Business, Log, SocialFriend, SocialInteraction
 from app.schemas.logs import LogCreate
 
+
 def create_log(db: Session, log: LogCreate):
     # pydantic v2: prefer model_dump; v1: fallback to dict
     data = log.model_dump() if hasattr(log, "model_dump") else log.dict()
@@ -16,6 +17,7 @@ def create_log(db: Session, log: LogCreate):
     db.commit()
     db.refresh(db_log)
     return db_log
+
 
 def get_recent_logs(db: Session, limit: int = 10, user_id: str | None = None):
     q = db.query(Log)
@@ -64,7 +66,30 @@ def get_businesses_by_ids(db: Session, business_ids: list[str]) -> dict[str, Bus
         return {}
 
     rows = db.query(Business).filter(Business.business_id.in_(business_ids)).all()
-    return {b.business_id: b for b in rows}
+    # Cast key to str to satisfy type checkers (SQLAlchemy Column type vs runtime value).
+    return {str(b.business_id): b for b in rows}
+
+
+def get_business(db: Session, business_id: str) -> Business | None:
+    """Fetch a single business by its id.
+
+    Returns None if not found.
+    """
+
+    if not business_id:
+        return None
+    return db.get(Business, business_id)
+
+
+def list_businesses(db: Session, skip: int = 0, limit: int = 100) -> list[Business]:
+    """Return a slice of businesses for simple listing/pagination."""
+
+    q = db.query(Business).order_by(Business.business_id)
+    if skip:
+        q = q.offset(skip)
+    if limit:
+        q = q.limit(limit)
+    return q.all()
 
 
 def replace_friends(db: Session, user_id: str, friends: list[str]) -> int:
@@ -90,7 +115,9 @@ def replace_friends(db: Session, user_id: str, friends: list[str]) -> int:
 
 
 def get_friends(db: Session, user_id: str) -> list[str]:
-    rows = db.query(SocialFriend.friend_id).filter(SocialFriend.user_id == user_id).all()
+    rows = (
+        db.query(SocialFriend.friend_id).filter(SocialFriend.user_id == user_id).all()
+    )
     return [r[0] for r in rows]
 
 
