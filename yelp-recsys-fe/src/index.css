@@ -1,0 +1,28 @@
+/* Áp dụng cho toàn bộ dự án */
+body {
+  font-family: 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Riêng các tiêu đề thì cho đậm lên cho giống Điện Máy Xanh */
+h1, h2, h3, .card-title {
+  font-family: 'Inria Serif', serif; /* Tiêu đề chính dùng Inria Serif */
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.biz-card__name { /* Tên quán ăn dùng Roboto đậm */
+  font-family: 'Roboto', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+@import "tailwindcss";
+
+@theme {
+  --color-md-surface: #FDFBFF;
+  --color-md-primary: #005FB0;
+  --color-md-secondary-container: #D1E4FF;
+  --color-md-surface-container: #F0F4F9;
+  --radius-md-lg: 24px;
+  --radius-md-xl: 28px;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}

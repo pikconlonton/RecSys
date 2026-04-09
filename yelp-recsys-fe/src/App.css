@@ -1,0 +1,33 @@
+/* src/App.css */
+:root {
+  /* Tông màu Facebook chuẩn */
+  --fb-blue: #1877f2;
+  --fb-bg: #f0f2f5;
+  --fb-card-bg: #ffffff;
+  --fb-text-main: #050505;
+  --fb-text-secondary: #65676b;
+  --fb-border: #dddfe2;
+  --fb-green: #36a420; /* Màu cho điểm Match */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--fb-bg);
+  color: var(--fb-text-main);
+  line-height: 1.34;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+ul {
+  list-style: none;
+}

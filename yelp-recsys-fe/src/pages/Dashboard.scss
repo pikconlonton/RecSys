@@ -1,0 +1,249 @@
+// ============================================================
+// Dashboard.scss
+// BEM: .dashboard
+// ============================================================
+
+// --- Tokens ---
+$color-primary:     var(--color-primary,      #3b82f6);
+$color-primary-end: var(--color-primary-hover, #60a5fa);
+$color-text-base:   var(--color-text-base,    #1e293b);
+$color-text-muted:  var(--color-text-muted,   #64748b);
+$color-border:      var(--color-border,       #e2e8f0); // Fallback for border color
+$font-display:      var(--font-display,       'Inria Serif', serif); // Use new font-display
+$font-mono:         var(--font-mono,          'ui-monospace', monospace);
+
+$gap-section: 3rem;
+$radius-card: 1.25rem;
+$radius-feature: 2rem;
+$transition-base: 220ms ease;
+$transition-slow: 380ms cubic-bezier(0.4, 0, 0.2, 1);
+
+// ============================================================
+// Block & Inner
+// ============================================================
+
+.dashboard {
+    min-height: 100vh;
+    background: #f8fafc;
+}
+
+.dashboard__inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: $gap-section;
+
+    @media (min-width: 768px) {
+        padding: 2.5rem 1.5rem;
+    }
+
+    @media (min-width: 1024px) {
+        padding: 3rem 2rem;
+    }
+}
+
+// ============================================================
+// BusinessCard Grid — 4 cột trong SectionContainer
+// Điều chỉnh selector nếu SectionContainer dùng class khác
+// ============================================================
+
+.dashboard__card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+
+    @media (min-width: 768px) {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+// ============================================================
+// Category Grid
+// ============================================================
+
+.dashboard__categories {
+    // no extra styles needed — grid handles layout
+}
+
+.dashboard__categories-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+
+    @media (min-width: 1024px) {
+        grid-template-columns: 1fr 2fr;
+        gap: 1.5rem;
+    }
+}
+
+// Feature tile (left big tile)
+.dashboard__category-feature {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    border-radius: $radius-feature;
+    padding: 2rem;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    color: #ffffff;
+    cursor: pointer;
+    transition: transform $transition-slow, box-shadow $transition-slow;
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+
+    @media (min-width: 1024px) {
+        min-height: 260px;
+        padding: 2.5rem;
+    }
+
+    &:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.4);
+    }
+}
+
+.dashboard__category-feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.9;
+}
+
+.dashboard__category-feature-title {
+    font-family: $font-display;
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 0;
+
+    @media (min-width: 768px) {
+        font-size: 2rem;
+    }
+}
+
+// Small tiles grid (right side)
+.dashboard__category-items {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+
+    @media (min-width: 480px) {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.dashboard__category-item {
+    background: #ffffff;
+    border: 1.5px solid $color-border;
+    border-radius: $radius-card;
+    padding: 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    color: $color-text-muted;
+    transition:
+        color $transition-base,
+        border-color $transition-base,
+        box-shadow $transition-base,
+        transform $transition-slow;
+
+    &:hover {
+        color: #3b82f6;
+        border-color: #93c5fd;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+        transform: translateY(-2px);
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+}
+
+.dashboard__category-item-icon {
+    font-size: 1.625rem;
+}
+
+.dashboard__category-item-label {
+    font-family: $font-mono;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+// ============================================================
+// Promo Banner
+// ============================================================
+
+.dashboard__promo {
+    position: relative;
+    border-radius: 2.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid $color-border;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+    &:hover .dashboard__promo-img {
+        transform: scale(1.04);
+    }
+}
+
+.dashboard__promo-img {
+    display: block;
+    width: 100%;
+    height: 12rem;
+    object-fit: cover;
+    transition: transform $transition-slow;
+
+    @media (min-width: 768px) {
+        height: 20rem;
+    }
+}
+
+.dashboard__promo-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.dashboard__promo-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 1.5rem 2rem;
+    pointer-events: none;
+
+    @media (min-width: 768px) {
+        padding: 2.5rem 3rem;
+    }
+}
+
+.dashboard__promo-eyebrow {
+    font-family: $font-mono;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #93c5fd;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.dashboard__promo-title {
+    font-family: $font-display;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+
+    @media (min-width: 768px) {
+        font-size: 3rem;
+    }
+}

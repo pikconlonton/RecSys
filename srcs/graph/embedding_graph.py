@@ -29,10 +29,10 @@ SEP = "=" * 60
 # ══════════════════════════════════════════════════════════════════════════════
 # Paths & Config
 # ══════════════════════════════════════════════════════════════════════════════
-GRAPH_PATH   = Path("outputs/graph.pt")              # Graph topology (no features)
-BIZ_EMB_PATH = Path("outputs/business_embeddings.pkl")  # {biz_id: np.array(384,)}
-USR_EMB_PATH = Path("outputs/user_embeddings.pkl")      # {user_id: np.array(384,)}
-OUT_PATH     = Path("outputs/embedded_graph.pt")        # Graph + features
+GRAPH_PATH   = Path("../../outputs/graph.pt")              # Graph topology (no features)
+BIZ_EMB_PATH = Path("../../outputs/business_embeddings.pkl")  # {biz_id: np.array(384,)}
+USR_EMB_PATH = Path("../../outputs/user_embeddings.pkl")      # {user_id: np.array(384,)}
+OUT_PATH     = Path("../../outputs/embedded_graph.pt")        # Graph + features
 
 EMB_DIM = 384  # all-MiniLM-L6-v2 output dimension
 
