@@ -21,9 +21,13 @@ import os
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
 
-from app.db.models import Business, Log, SocialFriend, SocialInteraction, User
-from app.db.session import Base, SessionLocal, engine
+# Ensure the project root (recsys-fastapi) is on sys.path so `app.*` imports work
+# when running this script directly (python scripts/seed_db.py).
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _repo_root() -> Path:
@@ -56,6 +60,16 @@ def _iter_edges_user_business_sample(max_lines: int = 200):
 
 def main() -> int:
     random.seed(0)
+
+    # Ensure the project root (recsys-fastapi) is on sys.path so `app.*` imports work
+    # when running this script directly (python scripts/seed_db.py).
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    # Local imports so they see the adjusted sys.path
+    from app.db.models import Business, Log, SocialFriend, SocialInteraction, User
+    from app.db.session import Base, SessionLocal, engine
 
     # Ensure schema exists (mirrors app lifespan behavior)
     Base.metadata.drop_all(bind=engine)
@@ -158,7 +172,7 @@ def main() -> int:
         db.commit()
 
         print("Seed complete")
-        print(f"DATABASE_URL={os.getenv('DATABASE_URL', 'sqlite:///./app.db')}")
+        print(f"DATABASE_URL={os.getenv('DATABASE_URL', 'sqlite:///./test.db')}")
         print(f"Seeded users={len(users)} businesses={len(businesses)}")
         print(f"main_user_for_social={main_user}")
         print(f"boost_business_id={boost_biz}")

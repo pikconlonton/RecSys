@@ -17,12 +17,14 @@ from app.services.recommender import recommender_service
 async def lifespan(app: FastAPI):
     # For local dev/tests this makes the service usable without running Alembic.
     # In production, prefer migrations.
+    # For SQLite we used to drop_all + create_all on each start, but that
+    # wipes out any seeded data (e.g. from scripts/seed_db.py). Now we only
+    # ensure tables exist; when you change models, run the seed script or
+    # apply migrations explicitly.
     if DATABASE_URL.startswith("sqlite"):
-        # SQLite files used in tests/dev don't support schema migrations here.
-        # Recreate schema so model changes (e.g., new columns) don't break.
-        Base.metadata.drop_all(bind=engine)
-
-    Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+    else:
+        Base.metadata.create_all(bind=engine)
 
     # Load RecSys artefacts once (embeddings + Faiss index).
     # If loading fails (missing deps/files), the API still works with heuristic recs.
