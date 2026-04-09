@@ -1,6 +1,12 @@
 from sqlalchemy.orm import Session
 
-from app.db.models import Business, Log, SocialFriend, SocialInteraction, User as UserModel
+from app.db.models import (
+    Business,
+    Log,
+    SocialFriend,
+    SocialInteraction,
+    User as UserModel,
+)
 from app.schemas.logs import LogCreate
 from app.schemas.users import UserCreate
 
@@ -74,7 +80,11 @@ def update_user(db: Session, user_id: str, payload) -> UserModel | None:
     if hasattr(payload, "model_dump"):
         data = payload.model_dump(exclude_unset=True)
     else:
-        data = payload.dict(exclude_unset=True) if hasattr(payload, "dict") else dict(payload)
+        data = (
+            payload.dict(exclude_unset=True)
+            if hasattr(payload, "dict")
+            else dict(payload)
+        )
 
     # Never change primary key via update payload.
     data.pop("user_id", None)

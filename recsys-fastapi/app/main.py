@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
         pass
     yield
 
+
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -53,6 +54,7 @@ app.include_router(businesses.router)
 app.include_router(recommendations.router)
 app.include_router(social.router)
 app.include_router(users.router)
+
 
 @app.get("/")
 def read_root():
