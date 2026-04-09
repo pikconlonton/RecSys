@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from app.db.models import Business, BusinessPhoto, Photo
+from app.db.session import SessionLocal
 from app.main import app
 
 
@@ -14,6 +16,30 @@ def _sample_business(business_id: str = "biz_test_1") -> dict:
         "lat": 10.0,
         "lng": 20.0,
     }
+
+
+def _seed_business_with_photos():
+    """Tạo 1 business với 2 photos để test cover_photo."""
+
+    db = SessionLocal()
+    try:
+        biz = Business(business_id="biz_cover_1", name="Biz Cover Test")
+        db.add(biz)
+
+        p1 = Photo(photo_id="p_first", path="https://example.com/first.jpg")
+        p2 = Photo(photo_id="p_second", path="https://example.com/second.jpg")
+        db.add_all([p1, p2])
+        db.flush()
+
+        db.add_all(
+            [
+                BusinessPhoto(business_id=biz.business_id, photo_id=p1.photo_id),
+                BusinessPhoto(business_id=biz.business_id, photo_id=p2.photo_id),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
 
 
 def test_upsert_and_get_business_detail():
@@ -32,6 +58,9 @@ def test_upsert_and_get_business_detail():
     assert body["name"] == payload[0]["name"]
     assert body["stars"] == payload[0]["stars"]
     assert body["review_count"] == payload[0]["review_count"]
+    # Khi chưa có ảnh gắn với business_detail_1, cover_photo phải là null
+    assert "cover_photo" in body
+    assert body["cover_photo"] is None
 
 
 def test_get_business_not_found():
@@ -62,6 +91,9 @@ def test_list_businesses():
     # At least the three we just upserted should exist in the result set
     ids = {it["business_id"] for it in items}
     assert {"biz_list_1", "biz_list_2", "biz_list_3"}.issubset(ids)
+    # cover_photo luôn có key, nhưng có thể null nếu chưa gắn ảnh
+    for it in items:
+        assert "cover_photo" in it
 
 
 def test_list_businesses_pagination():
@@ -90,3 +122,30 @@ def test_list_businesses_pagination():
     # Basic sanity: pages should not be identical when enough data exists
     if len(data1) == 2 and len(data2) >= 1:
         assert data1 != data2
+
+
+def test_business_detail_includes_cover_photo_from_first_image():
+    client = TestClient(app)
+
+    _seed_business_with_photos()
+
+    res = client.get("/businesses/biz_cover_1")
+    assert res.status_code == 200, res.text
+    body = res.json()
+
+    assert body["business_id"] == "biz_cover_1"
+    assert body["cover_photo"] == "https://example.com/first.jpg"
+
+
+def test_business_list_includes_cover_photo_when_available():
+    client = TestClient(app)
+
+    _seed_business_with_photos()
+
+    res = client.get("/businesses/?limit=1000")
+    assert res.status_code == 200, res.text
+    items = res.json()
+
+    match = next((b for b in items if b["business_id"] == "biz_cover_1"), None)
+    assert match is not None
+    assert match["cover_photo"] == "https://example.com/first.jpg"

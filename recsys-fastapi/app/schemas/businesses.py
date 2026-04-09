@@ -23,4 +23,7 @@ class BusinessUpsert(BusinessBase):
 class Business(BusinessBase):
     updated_at: datetime | None = None
 
+    # Ảnh nền mặc định (lấy từ ảnh đầu tiên của business nếu có)
+    cover_photo: str | None = None
+
     model_config = ConfigDict(from_attributes=True)

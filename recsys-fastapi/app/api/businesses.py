@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import crud
 from app.db.session import get_db
 from app.schemas.businesses import Business, BusinessUpsert
+from app.schemas.photos import Photo
 
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
@@ -34,3 +35,14 @@ def get_business_detail(business_id: str, db: Session = Depends(get_db)):
     if biz is None:
         raise HTTPException(status_code=404, detail="Business not found")
     return biz
+
+
+@router.get("/{business_id}/photos", response_model=list[Photo])
+def list_business_photos(business_id: str, db: Session = Depends(get_db)):
+    """Lấy danh sách ảnh cho 1 business.
+
+    Nếu business chưa gắn ảnh nào thì trả về list rỗng.
+    """
+
+    photos = crud.get_photos_for_business(db=db, business_id=business_id)
+    return photos

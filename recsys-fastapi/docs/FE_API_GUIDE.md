@@ -229,6 +229,17 @@ Trong DB, backend có bảng `businesses` để lưu metadata của từng busin
 - `lng` (float, nullable)
 - `updated_at` (datetime)
 
+Ngoài ra, để hỗ trợ ảnh cho business, backend thêm 2 bảng:
+
+- `photos`: lưu thông tin từng ảnh
+  - `photo_id` (string, PK)
+  - `path` (string, không null) – đường dẫn hoặc URL ảnh
+  - `created_at` (datetime)
+- `business_photos`: bảng quan hệ N-N giữa business và photo
+  - `id` (int, PK)
+  - `business_id` (string)
+  - `photo_id` (string)
+
 > Lưu ý: thông tin user chi tiết (name/email/avatar) được lưu ở bảng `users` (xem thêm mục **7)**).
 > Các bảng `logs`, `social_friends`, `social_interactions` chỉ lưu `user_id` dạng string để tham chiếu tới user.
 
@@ -321,6 +332,41 @@ Response 404:
 ```json
 { "detail": "Business not found" }
 ```
+
+### 5.5 Lấy danh sách ảnh của 1 business
+
+`GET /businesses/{business_id}/photos`
+
+**Mục đích**: FE lấy danh sách ảnh (URL/path) gắn với 1 business, ví dụ để render gallery trên trang detail.
+
+Path param:
+
+- `business_id` (string)
+
+Response 200 (khi có ảnh):
+
+```json
+[
+  {
+    "photo_id": "p1",
+    "path": "https://example.com/p1.jpg",
+    "created_at": "2026-04-09T10:00:00Z"
+  },
+  {
+    "photo_id": "p2",
+    "path": "https://example.com/p2.jpg",
+    "created_at": "2026-04-09T10:01:00Z"
+  }
+]
+```
+
+Response 200 (khi chưa có ảnh):
+
+```json
+[]
+```
+
+> Lưu ý: hiện tại API này chỉ đọc; việc tạo ảnh và gắn ảnh vào business được handle bởi backend/tool riêng (seed script, backoffice, v.v.).
 
 ---
 

@@ -59,6 +59,37 @@ class Business(Base):
         return f"<Business(business_id={self.business_id}, name={self.name})>"
 
 
+class Photo(Base):
+    """Photo metadata stored in DB.
+
+    Hiện tại backend chỉ cần id ảnh (string) và đường dẫn (path/url).
+    Các trường khác (caption, width/height, v.v.) có thể bổ sung sau nếu cần.
+    """
+
+    __tablename__ = "photos"
+
+    # Stable string id cho ảnh (có thể map sang id trong hệ thống khác).
+    photo_id = Column(String, primary_key=True, index=True)
+
+    # Đường dẫn ảnh (có thể là URL hoặc path tương đối).
+    path = Column(String, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BusinessPhoto(Base):
+    """N-N mapping giữa business và photo.
+
+    Mỗi record thể hiện 1 ảnh thuộc về 1 business.
+    """
+
+    __tablename__ = "business_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(String, index=True, nullable=False)
+    photo_id = Column(String, index=True, nullable=False)
+
+
 class SocialFriend(Base):
     """Directed friend edge from FE: user_id -> friend_id."""
 

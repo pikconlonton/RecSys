@@ -2,7 +2,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models import (
     Business,
+    BusinessPhoto,
     Log,
+    Photo,
     SocialFriend,
     SocialInteraction,
     User as UserModel,
@@ -160,7 +162,20 @@ def get_business(db: Session, business_id: str) -> Business | None:
 
     if not business_id:
         return None
-    return db.get(Business, business_id)
+
+    obj = db.get(Business, business_id)
+    if obj is None:
+        return None
+
+    # Attach cover_photo (ảnh đầu tiên nếu có) để API trả ra kèm theo business.
+    photos = get_photos_for_business(db, business_id=str(obj.business_id))
+    if photos:
+        # dùng path của ảnh đầu tiên làm cover
+        setattr(obj, "cover_photo", photos[0].path)
+    else:
+        setattr(obj, "cover_photo", None)
+
+    return obj
 
 
 def list_businesses(db: Session, skip: int = 0, limit: int = 100) -> list[Business]:
@@ -171,7 +186,18 @@ def list_businesses(db: Session, skip: int = 0, limit: int = 100) -> list[Busine
         q = q.offset(skip)
     if limit:
         q = q.limit(limit)
-    return q.all()
+
+    items = q.all()
+
+    # Gắn cover_photo cho từng business (ảnh đầu tiên nếu có).
+    for obj in items:
+        photos = get_photos_for_business(db, business_id=str(obj.business_id))
+        if photos:
+            setattr(obj, "cover_photo", photos[0].path)
+        else:
+            setattr(obj, "cover_photo", None)
+
+    return items
 
 
 def replace_friends(db: Session, user_id: str, friends: list[str]) -> int:
@@ -235,3 +261,80 @@ def get_social_scores_for_candidates(
     for biz_id, w in rows:
         out[biz_id] = out.get(biz_id, 0.0) + float(w or 0.0)
     return out
+
+
+def create_or_update_photo(db: Session, photo_id: str, path: str) -> Photo:
+    """Create or update a photo record by photo_id.
+
+    Đảm bảo path luôn được cập nhật nếu FE gửi lại cùng photo_id.
+    """
+
+    if not photo_id:
+        raise ValueError("photo_id is required")
+
+    key = str(photo_id)
+    obj = db.get(Photo, key)
+    if obj is None:
+        obj = Photo(photo_id=key, path=path)
+        db.add(obj)
+    else:
+        # Use setattr để tránh cảnh báo type checker với SQLAlchemy Column type.
+        setattr(obj, "path", path)
+
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def link_photo_to_business(
+    db: Session, business_id: str, photo_id: str
+) -> BusinessPhoto:
+    """Ensure there is a mapping giữa business và photo.
+
+    Nếu mapping đã tồn tại thì trả về bản ghi cũ, không tạo bản ghi trùng.
+    """
+
+    if not business_id or not photo_id:
+        raise ValueError("business_id and photo_id are required")
+
+    biz_key = str(business_id)
+    photo_key = str(photo_id)
+
+    link = (
+        db.query(BusinessPhoto)
+        .filter(
+            BusinessPhoto.business_id == biz_key,
+            BusinessPhoto.photo_id == photo_key,
+        )
+        .first()
+    )
+
+    if link is None:
+        link = BusinessPhoto(business_id=biz_key, photo_id=photo_key)
+        db.add(link)
+        db.commit()
+        db.refresh(link)
+
+    return link
+
+
+def get_photos_for_business(db: Session, business_id: str) -> list[Photo]:
+    """Return all photos gắn với 1 business.
+
+    Nếu business chưa có ảnh thì trả về list rỗng.
+    """
+
+    if not business_id:
+        return []
+
+    biz_key = str(business_id)
+
+    rows = (
+        db.query(Photo)
+        .join(BusinessPhoto, Photo.photo_id == BusinessPhoto.photo_id)
+        .filter(BusinessPhoto.business_id == biz_key)
+        .order_by(BusinessPhoto.id.asc())
+        .all()
+    )
+
+    return rows
