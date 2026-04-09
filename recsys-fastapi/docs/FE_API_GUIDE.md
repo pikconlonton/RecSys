@@ -65,25 +65,43 @@ Mở swagger:
 
 ## 1) Health check
 
-### `GET /`
+### Seed DB (logs/business/social/users demo)
 
-**Mục đích**: kiểm tra service up.
+Chạy trong thư mục `recsys-fastapi/`:
 
-**Response 200**
+```bash
+source .venv/bin/activate
 
-```json
-{ "message": "Welcome to the User Action Logging API!" }
+# Seed vào file sqlite ./test.db (khuyến nghị để không đè app.db nếu bạn đang dùng)
+DATABASE_URL=sqlite:///./test.db python scripts/seed_db.py
 ```
 
----
+Script sẽ:
 
-## 2) Gửi log hành vi user
+- recreate schema (drop/create)
+- seed `users` (basic profile), `logs` (view), `businesses` (metadata tối thiểu), `social_friends`, `social_interactions`
+- in ra `main_user_for_social` và `boost_business_id` để bạn demo social nhanh
 
-### `POST /logs/`
-
-**Mục đích**: FE gửi event (ví dụ user view business) để BE lưu DB.
+### (Optional) Import thêm mẫu data từ Yelp JSON
 
 ### Request body
+>- `yelp_academic_dataset_business.json`
+>- `yelp_academic_dataset_user.json`
+
+Bạn có thể import nhanh ~100 bản ghi đầu vào DB hiện tại để FE có nhiều user/business thật hơn:
+
+```bash
+source .venv/bin/activate
+DATABASE_URL=sqlite:///./test.db python scripts/import_yelp_sample.py --limit 100
+```
+
+Script này sẽ:
+
+- đọc head `N` dòng đầu của 2 file JSON-lines của Yelp
+- insert/update vào bảng `businesses` các field: `business_id`, `name`, `stars`, `review_count`, `categories`, `address`, `lat`, `lng`
+- insert/update vào bảng `users` các field: `user_id`, `name`
+
+### Chạy API dùng DB vừa seed
 
 ```json
 {
