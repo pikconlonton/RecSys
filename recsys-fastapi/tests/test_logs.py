@@ -217,6 +217,55 @@ def test_recommendations_enriched_with_business_metadata():
                 assert first["metadata"]["name"] == "Biz Meta 1"
 
 
+def test_recommendations_one_log_still_returns_full_topk_via_db_fill():
+    """If user has only 1 recent view log, heuristic would normally produce 1 unique
+    business_id. The recommender should top-up candidates from `businesses` so FE
+    still receives `topk` items (cold-start fill has score=0.0).
+    """
+
+    user_id = "u_one_log"
+    with TestClient(app) as client:
+        # Ensure we have enough businesses in DB to fill.
+        payload = []
+        for i in range(1, 8):
+            payload.append(
+                {
+                    "business_id": f"b_fill_{i}",
+                    "name": f"Fill Biz {i}",
+                    "stars": 4.0,
+                    "review_count": 10 + i,
+                    "categories": "Test",
+                    "address": "Test",
+                    "lat": 0.0,
+                    "lng": 0.0,
+                }
+            )
+
+        r = client.post("/businesses/upsert", json=payload)
+        assert r.status_code == 200
+
+        # Only one log.
+        r = client.post(
+            "/logs/",
+            json={"user_id": user_id, "action": "view", "business_id": "b_fill_1"},
+        )
+        assert r.status_code == 200
+
+        topk = 5
+        rec = client.get(f"/recommendations/{user_id}?topk={topk}")
+        assert rec.status_code == 200
+        data = rec.json()
+        assert len(data["items"]) == topk
+
+        # First item should be the viewed business with score >= 1.
+        assert data["items"][0]["business_id"] == "b_fill_1"
+        assert float(data["items"][0]["score"]) >= 1.0
+
+        # Remaining are filled from DB and have score 0.0.
+        for it in data["items"][1:]:
+            assert it["business_id"].startswith("b_fill_")
+
+
 def test_social_reranking_from_fe_data():
     """Social reranking should boost businesses that friends interacted with.
 

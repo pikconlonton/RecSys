@@ -35,20 +35,20 @@ class RecommenderService:
         self._artefacts = artefacts
 
     def recommend(self, db: Session, user_id: str | None, topk: int = 10) -> list[dict[str, Any]]:
-        # Pull recent logs for that user. If for any reason the filter returns
-        # empty but data exists (e.g., legacy rows), fall back to global recent.
+        # Pull recent logs for that user.
+        # IMPORTANT: do NOT fall back to *global* logs here. If the user has no logs,
+        # we either:
+        #   - use user-only Faiss retrieval (if artefacts + mapping exist), or
+        #   - cold-start fill from `businesses` (heuristic mode).
         logs = crud.get_recent_logs(db=db, limit=self.recent_log_limit, user_id=user_id)
-        if user_id is not None and not logs:
-            logs = crud.get_recent_logs(db=db, limit=self.recent_log_limit, user_id=None)
-
-        if not logs:
-            return []
 
         # Prefer real Faiss inference if artefacts are loaded.
+        # Behavior:
+        # - If user has NO logs: user-only retrieval (recent_business_ids=[])
+        # - If user has logs: user + session retrieval
         if self._artefacts is not None and user_id is not None:
             recent_views = [l.business_id for l in logs if l.action == "view" and l.business_id]
 
-            # user_id is a string in the API contract; artefacts use string keys.
             recs = recommend_from_recent_views(
                 artefacts=self._artefacts,
                 user_id=user_id,
@@ -57,16 +57,15 @@ class RecommenderService:
                 config=self._cfg,
             )
 
-            # Keep response contract stable with previous fields.
             now = datetime.utcnow().isoformat()
             for r in recs:
                 r.setdefault("generated_at", now)
-            # If mapping is missing / user unknown, real inference may return [].
-            # In that case, fall back to heuristic so the API still returns candidates.
+
+            # If mapping is missing / user unknown, inference returns [] and we fall back below.
             if recs:
                 return recs
 
-        # Basic heuristic: recommend the most frequently viewed businesses.
+        # Heuristic fallback (no artefacts OR user not in mapping): use views from logs.
         viewed = [l.business_id for l in logs if l.action == "view" and l.business_id]
         counts = Counter(viewed)
         now = datetime.utcnow().isoformat()
@@ -83,18 +82,12 @@ class RecommenderService:
                 }
             )
 
-        # IMPORTANT:
-        # `recent_log_limit` defines how many logs are used to build the *session signal*.
-        # It must NOT cap the number of recommendations returned.
-        # If the user has only 1 recent view (or recent_log_limit is small), the
-        # frequency-based heuristic may produce < topk unique business_ids. In that
-        # case, we top up from the Business table so FE always gets a full list.
+        # `recent_log_limit` limits the session signal, not the response size.
+        # If we have < topk unique from logs (or no logs at all), top up from DB.
         if len(recs) < topk:
             seen_ids = {r.get("business_id") for r in recs if isinstance(r, dict)}
             seen_ids.update([bid for bid in viewed if bid])
 
-            # Pull a stable slice from DB (simple & portable). We can later improve this
-            # to sort by stars/review_count or add a dedicated "popular" table.
             fill = crud.list_businesses(db=db, skip=0, limit=max(topk * 5, 100))
 
             rank = len(recs)
