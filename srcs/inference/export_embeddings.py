@@ -32,18 +32,19 @@ from collections import defaultdict
 # ══════════════════════════════════════════════════════════════════════════════
 # Config — phải khớp với training config
 # ══════════════════════════════════════════════════════════════════════════════
-DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 GRAPH_PATH = Path("../../outputs/embedded_graph.pt")  # Graph với 384-dim features
-UB_PATH    = Path("../../outputs/edges_user_business.txt")
-BB_PATH    = Path("../../outputs/edges_business_business_similar.txt")
-CKPT_PATH  = Path("../../outputs/ckpt1/best.pt")      # Best checkpoint từ training
-OUT_DIR    = Path("../../outputs")
+UB_PATH = Path("../../outputs/edges_user_business.txt")
+BB_PATH = Path("../../outputs/edges_business_business_similar.txt")
+CKPT_PATH = Path("../../outputs/ckpt1/best.pt")  # Best checkpoint từ training
+OUT_DIR = Path("../../outputs")
 
 # Model hyperparameters (PHẢI GIỐNG training notebook)
-IN_DIM     = 384   # SentenceTransformer output dimension
-EMBED_DIM  = 128   # GNN embedding dimension
-NUM_LAYERS = 3     # Số lớp LightGCN propagation
-DROPOUT    = 0.1
+IN_DIM = 384  # SentenceTransformer output dimension
+EMBED_DIM = 128  # GNN embedding dimension
+NUM_LAYERS = 3  # Số lớp LightGCN propagation
+DROPOUT = 0.1
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Model — PHẢI GIỐNG EXACTLY với class trong training notebook
@@ -65,13 +66,14 @@ class HeteroLightGCN(nn.Module):
 
     Sparse matmul luôn cast về fp32 vì CUDA sparse không hỗ trợ fp16.
     """
+
     def __init__(self, in_dim, embed_dim, num_layers, dropout=0.1):
         super().__init__()
         self.num_layers = num_layers
-        self.dropout    = nn.Dropout(dropout)
-        self.user_proj  = nn.Linear(in_dim, embed_dim, bias=False)
-        self.biz_proj   = nn.Linear(in_dim, embed_dim, bias=False)
-        self.sim_head   = nn.Sequential(
+        self.dropout = nn.Dropout(dropout)
+        self.user_proj = nn.Linear(in_dim, embed_dim, bias=False)
+        self.biz_proj = nn.Linear(in_dim, embed_dim, bias=False)
+        self.sim_head = nn.Sequential(
             nn.Linear(embed_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, embed_dim),
@@ -90,9 +92,9 @@ class HeteroLightGCN(nn.Module):
             u_layers.append(u_cur)
             b_layers.append(b_cur)
         user_emb = torch.stack(u_layers, dim=0).mean(dim=0)
-        biz_emb  = torch.stack(b_layers, dim=0).mean(dim=0)
+        biz_emb = torch.stack(b_layers, dim=0).mean(dim=0)
         user_h = F.normalize(user_emb, dim=-1)
-        biz_h  = F.normalize(biz_emb,  dim=-1)
+        biz_h = F.normalize(biz_emb, dim=-1)
         return user_h, biz_h
 
 
@@ -122,12 +124,12 @@ def main():
     # ── 1. Load graph ─────────────────────────────────────────────────────────
     print("Loading graph …")
     ckpt_graph = torch.load(GRAPH_PATH, weights_only=False)
-    data     = ckpt_graph["data"]
+    data = ckpt_graph["data"]
     user2idx = ckpt_graph["user2idx"]
-    biz2idx  = ckpt_graph["biz2idx"]
+    biz2idx = ckpt_graph["biz2idx"]
 
     NUM_USERS = data["user"].num_nodes
-    NUM_BIZ   = data["business"].num_nodes
+    NUM_BIZ = data["business"].num_nodes
     print(f"  Users={NUM_USERS:,}  Businesses={NUM_BIZ:,}")
 
     # ══ 2. Build adjacency matrices (giống training notebook) ═══════════════
@@ -150,21 +152,26 @@ def main():
 
     bb_ei1 = data[("business", "similar", "business")].edge_index
     bb_ei2 = data[("business", "similar_rev", "business")].edge_index
-    _idx = torch.cat([
-        torch.stack([bb_ei1[1].cpu(), bb_ei1[0].cpu()]),
-        torch.stack([bb_ei2[1].cpu(), bb_ei2[0].cpu()]),
-    ], dim=1)
+    _idx = torch.cat(
+        [
+            torch.stack([bb_ei1[1].cpu(), bb_ei1[0].cpu()]),
+            torch.stack([bb_ei2[1].cpu(), bb_ei2[0].cpu()]),
+        ],
+        dim=1,
+    )
     _val = torch.ones(_idx.size(1))
     _adj = torch.sparse_coo_tensor(_idx, _val, (NUM_BIZ, NUM_BIZ)).coalesce()
     _row, _col = _adj.indices()[1], _adj.indices()[0]
     _dd = torch.zeros(NUM_BIZ).scatter_add_(0, _col, torch.ones(_col.size(0)))
     _ds = torch.zeros(NUM_BIZ).scatter_add_(0, _row, torch.ones(_row.size(0)))
     _vn = _dd[_col].pow(-0.5).clamp(max=1e5) * _ds[_row].pow(-0.5).clamp(max=1e5)
-    adj_bb = torch.sparse_coo_tensor(
-        torch.stack([_col, _row]), _vn, (NUM_BIZ, NUM_BIZ)
-    ).coalesce().to(DEVICE)
+    adj_bb = (
+        torch.sparse_coo_tensor(torch.stack([_col, _row]), _vn, (NUM_BIZ, NUM_BIZ))
+        .coalesce()
+        .to(DEVICE)
+    )
 
-    print(f"  Done in {time.time()-t0:.1f}s")
+    print(f"  Done in {time.time() - t0:.1f}s")
 
     # ══ 3. Load model weights từ checkpoint ═════════════════════════════
     # Checkpoint chứa: model state_dict, optimizer, epoch, best_loss────────
@@ -174,20 +181,22 @@ def main():
     model = HeteroLightGCN(IN_DIM, EMBED_DIM, NUM_LAYERS, DROPOUT).to(DEVICE)
     model.load_state_dict(ckpt["model"])
     model.eval()
-    print(f"  Loaded epoch {ckpt.get('epoch', '?')}, best_loss={ckpt.get('best_loss', '?')}")
+    print(
+        f"  Loaded epoch {ckpt.get('epoch', '?')}, best_loss={ckpt.get('best_loss', '?')}"
+    )
 
     # ══ 4. Forward pass (eval mode, no grad) ═══════════════════════════
     # model.eval() tắt dropout → embeddings deterministic
     # no_grad() tiết kiệm VRAM (không cần backward)────────
     print("Running forward pass …")
     user_feat = data["user"].x.to(DEVICE)
-    biz_feat  = data["business"].x.to(DEVICE)
+    biz_feat = data["business"].x.to(DEVICE)
 
     with torch.no_grad():
         user_h, biz_h = model(user_feat, biz_feat, adj_ub, adj_bu, adj_uu, adj_bb)
 
     user_h = user_h.cpu()
-    biz_h  = biz_h.cpu()
+    biz_h = biz_h.cpu()
     print(f"  user_h: {user_h.shape}  biz_h: {biz_h.shape}")
 
     # ══ 5. Lưu embeddings + mappings ════════════════════════════════════
@@ -195,15 +204,18 @@ def main():
     # biz_h.pt:  [N_biz, 128]  — dùng cho Faiss index
     # mappings.pt: dict các mapping để convert giữa index ↔ string ID────
     torch.save(user_h, OUT_DIR / "user_h.pt")
-    torch.save(biz_h,  OUT_DIR / "biz_h.pt")
+    torch.save(biz_h, OUT_DIR / "biz_h.pt")
 
     # Also save mappings for inference convenience
-    torch.save({
-        "user2idx": user2idx,
-        "biz2idx":  biz2idx,
-        "idx2user": {v: k for k, v in user2idx.items()},
-        "idx2biz":  {v: k for k, v in biz2idx.items()},
-    }, OUT_DIR / "mappings.pt")
+    torch.save(
+        {
+            "user2idx": user2idx,
+            "biz2idx": biz2idx,
+            "idx2user": {v: k for k, v in user2idx.items()},
+            "idx2biz": {v: k for k, v in biz2idx.items()},
+        },
+        OUT_DIR / "mappings.pt",
+    )
 
     print(f"Saved to {OUT_DIR}/{{user_h, biz_h, mappings}}.pt")
 
