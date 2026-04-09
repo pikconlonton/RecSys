@@ -101,6 +101,25 @@ Script này sẽ:
 - insert/update vào bảng `businesses` các field: `business_id`, `name`, `stars`, `review_count`, `categories`, `address`, `lat`, `lng`
 - insert/update vào bảng `users` các field: `user_id`, `name`
 
+Nếu bạn muốn có luôn ảnh thật từ Yelp cho các business này, có thể chạy thêm:
+
+```bash
+source .venv/bin/activate
+DATABASE_URL=sqlite:///./test.db python scripts/import_yelp_photos.py --limit 100
+```
+
+Script `import_yelp_photos.py` sẽ:
+
+- đọc head `N` dòng đầu từ `photos.json`
+- map từng bản ghi `photo_id` ↔ `business_id` sang file ảnh thật trong thư mục `../datasets/photos/`
+- insert/update vào bảng `photos` field: `photo_id`, `path` (ví dụ `../datasets/photos/<file>.jpg`)
+- insert mapping vào bảng `business_photos` field: `business_id`, `photo_id`
+
+Sau bước này, khi FE call:
+
+- `GET /businesses/{business_id}` sẽ có `cover_photo` trỏ tới 1 đường dẫn ảnh thật
+- `GET /businesses/{business_id}/photos` sẽ trả về danh sách toàn bộ ảnh của business đó
+
 ### Chạy API dùng DB vừa seed
 
 ```json
