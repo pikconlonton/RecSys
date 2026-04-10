@@ -1,5 +1,5 @@
 # RecSys — Yelp Philadelphia Recommendation System
-
+# Lưu ý: Ai xem repo thấy hay xin 1 star và 1 issues 
 > **Graph Neural Network (HeteroLightGCN)** kết hợp **session-aware inference** và **social re-ranking** trên dữ liệu Yelp Philadelphia.
 
 ```
